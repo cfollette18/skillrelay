@@ -320,3 +320,31 @@ def test_simultaneous_claims_cannot_lease_one_job_twice(service):
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(service.claim, ["learner-a", "learner-b"]))
     assert sum("token" in result for result in results) == 1
+
+
+@pytest.mark.parametrize("action", ["revoke", "reject", "request_changes"])
+def test_closed_versions_cannot_be_revived_via_defer(service, action):
+    v = propose(service)
+    evaluate(service)
+    service.review("human", v["id"], v["hash"], action)
+    with pytest.raises(ValueError, match="closed"):
+        service.review("human", v["id"], v["hash"], "defer")
+    with pytest.raises(ValueError):
+        service.review("human", v["id"], v["hash"], "rollback")
+
+
+def test_historical_skill_use_remains_idempotent_after_revocation(service):
+    v = propose(service)
+    evaluate(service)
+    service.review("human", v["id"], v["hash"], "approve")
+    run = service.start("worker", "repair", "Apply selected version")
+    event = Event(
+        event_id="use",
+        kind="skill_use",
+        skill_version=v["id"],
+        action="Applied exact version",
+        success=True,
+    )
+    first = service.event("worker", run["id"], event)
+    service.review("human", v["id"], v["hash"], "revoke")
+    assert service.event("worker", run["id"], event) == first

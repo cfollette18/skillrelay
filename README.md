@@ -8,6 +8,18 @@ It includes its own SQLite trace store, learning queue, evaluation gates, and br
 
 > **v0.1 scope:** one trusted workspace, externally orchestrated agents, explicit instrumentation. SkillRelay cannot observe unreported tool calls or make an offline agent learn. Auto-distillation queues jobs; a connected learning agent or the optional command driver processes them. Behavioral benchmarking is intentionally deferred.
 
+## Demo
+
+[Watch the recorded Hermes walkthrough](docs/media/skillrelay-demo.mp4) · [Inspect the actual evidence](docs/media/demo-evidence.json)
+
+[![SkillRelay review console](docs/media/console.png)](docs/media/skillrelay-demo.mp4)
+
+The demo uses real Hermes sessions and a synthetic invoice fixture. It shows a failed import,
+a successful retry, an evidence-linked skill, a separate evaluation at **60/100**, reviewer
+activation, exact-version reuse in a fresh session, a revision, automatic fallback, and rollback.
+The video is a console walkthrough of those real results; reviewer clicks are scripted and labeled.
+It is not a benchmark or a claim of improved agent performance.
+
 ## Quick start
 
 Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).

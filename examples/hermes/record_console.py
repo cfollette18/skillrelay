@@ -62,6 +62,11 @@ def main():
             page.get_by_role("button", name="Audit history", exact=True).click()
             page.wait_for_timeout(5000)
         else:
+            # This second proposal was evaluated under automatic mode: 60 < 90.
+            page.wait_for_timeout(4000)
+            assert "pending_review" in page.locator("#content").inner_text()
+            page.get_by_role("button", name="approve", exact=True).first.click()
+            page.wait_for_timeout(2500)
             page.get_by_role("button", name="Version diff", exact=True).first.click()
             page.wait_for_timeout(4000)
             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")

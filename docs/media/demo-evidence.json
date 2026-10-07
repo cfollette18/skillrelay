@@ -1,0 +1,448 @@
+{
+  "captured_at": "2026-10-07T18:19:19.340366+00:00",
+  "method": "Live Hermes sessions via MCP; synthetic fixture; scripted reviewer actions",
+  "not_a_behavioral_benchmark": true,
+  "redactions": [
+    "Absolute repository path replaced with $REPO",
+    "Job lease tokens omitted"
+  ],
+  "runs": [
+    {
+      "agent": "hermes-worker",
+      "created": 1791396249.1693597,
+      "goal": "Import the synthetic invoice fixture",
+      "id": "1cd4060a347846c6a08abd4b8c0c8248",
+      "outcome": "pass",
+      "outcome_source": "self_report",
+      "parent": null,
+      "revision": 3,
+      "role": "worker",
+      "status": "completed",
+      "task": "invoice-import",
+      "workflow_id": "2cfc2065fa48448e9a2561d4e8ec70c6"
+    },
+    {
+      "agent": "hermes-fresh",
+      "created": 1791396738.566536,
+      "goal": "Apply the BOM+semicolon invoice import skill and verify the parser loads 3 rows totalling 125.50 USD",
+      "id": "a3712a96c9fc46808a67957b3e78bf65",
+      "outcome": "pass",
+      "outcome_source": "self_report",
+      "parent": null,
+      "revision": 2,
+      "role": "worker",
+      "status": "completed",
+      "task": "invoice-import",
+      "workflow_id": "072b69483cbb4cd79cf42ac824529e23"
+    }
+  ],
+  "workflows": [
+    {
+      "created": 1791396249.1688826,
+      "id": "2cfc2065fa48448e9a2561d4e8ec70c6",
+      "outcome": "pass",
+      "owner": "hermes-worker",
+      "pattern": "single",
+      "status": "completed",
+      "task": "invoice-import"
+    },
+    {
+      "created": 1791396738.5660667,
+      "id": "072b69483cbb4cd79cf42ac824529e23",
+      "outcome": "pass",
+      "owner": "hermes-fresh",
+      "pattern": "single",
+      "status": "completed",
+      "task": "invoice-import"
+    }
+  ],
+  "events": [
+    {
+      "action": "Execute python3 naive_import.py on invoice.csv fixture to attempt a baseline import.",
+      "causes": [],
+      "event_id": "evt-001-naive-failure",
+      "id": "1cd4060a347846c6a08abd4b8c0c8248:evt-001-naive-failure",
+      "kind": "failure",
+      "recipient": "",
+      "result": "Traceback (most recent call last):\n  File \"$REPO/examples/hermes/naive_import.py\", line 8, in <module>\n    print(sum(float(row[\"total_usd\"]) for row in rows))\n  File \"$REPO/examples/hermes/naive_import.py\", line 8, in <genexpr>\n    print(sum(float(row[\"total_usd\"]) for row in rows))\nKeyError: 'total_usd'\nexit=1",
+      "run_id": "1cd4060a347846c6a08abd4b8c0c8248",
+      "skill_version": "",
+      "success": false,
+      "tool": "terminal: python3 naive_import.py",
+      "workflow_id": "2cfc2065fa48448e9a2561d4e8ec70c6"
+    },
+    {
+      "action": "Execute python3 robust_import.py on invoice.csv fixture after diagnosing format (UTF-8 BOM, semicolon delimiter, Decimal totals).",
+      "causes": [],
+      "event_id": "evt-002-robust-verification",
+      "id": "1cd4060a347846c6a08abd4b8c0c8248:evt-002-robust-verification",
+      "kind": "verification",
+      "recipient": "",
+      "result": "PASS: imported 3 invoices; total USD 125.50\nexit=0",
+      "run_id": "1cd4060a347846c6a08abd4b8c0c8248",
+      "skill_version": "",
+      "success": true,
+      "tool": "terminal: python3 robust_import.py",
+      "workflow_id": "2cfc2065fa48448e9a2561d4e8ec70c6"
+    },
+    {
+      "action": "Applied skill 5c9ac60ad376433081b39c1ea5928f67@1 ('Import semicolon invoices with a BOM'): opened invoice.csv with encoding='utf-8-sig', parsed with csv.DictReader(delimiter=';'), summed 'total_usd' via Decimal, ran python3 robust_import.py",
+      "causes": [],
+      "event_id": "evt-invoice-import-skill-use",
+      "id": "a3712a96c9fc46808a67957b3e78bf65:evt-invoice-import-skill-use",
+      "kind": "skill_use",
+      "recipient": "",
+      "result": "PASS: imported 3 invoices; total USD 125.50",
+      "run_id": "a3712a96c9fc46808a67957b3e78bf65",
+      "skill_version": "5c9ac60ad376433081b39c1ea5928f67@1",
+      "success": true,
+      "tool": "terminal",
+      "workflow_id": "072b69483cbb4cd79cf42ac824529e23"
+    }
+  ],
+  "versions": [
+    {
+      "checks": {
+        "complete_run": true,
+        "instruction_screen": true,
+        "no_conflict": true,
+        "references": true
+      },
+      "confidence": 60,
+      "created": 1791396381.3242795,
+      "data": {
+        "applicability": [
+          "CSV-like invoice files that begin with a UTF-8 byte-order mark",
+          "Invoice files that use ';' as the field delimiter",
+          "Invoice files where the 'total_usd' (or equivalent monetary) column must be summed accurately"
+        ],
+        "checks": [
+          "Verify the parser loads without raising KeyError on the expected monetary column.",
+          "Verify that the import reports the expected number of invoice rows (e.g. 3 rows in the observed fixture).",
+          "Verify that the summed total matches the expected monetary total (e.g. 125.50 USD in the observed fixture)."
+        ],
+        "decision": "create",
+        "dependencies": {},
+        "limitations": [
+          "Observed only on a single synthetic fixture with 3 rows; broader performance and correctness on larger or differently shaped invoice files have not been measured.",
+          "Does not claim any speedup or performance gain over alternative parsers.",
+          "No additional rows beyond the budget of this skill proposal were tested.",
+          "Other field names, currencies, or delimiters were not exercised in the observed run and should be validated separately before reuse."
+        ],
+        "skill_id": null,
+        "steps": [
+          {
+            "evidence": [
+              "1cd4060a347846c6a08abd4b8c0c8248:evt-002-robust-verification"
+            ],
+            "instruction": "Open the invoice file with encoding='utf-8-sig' so the leading BOM is stripped before any header parsing."
+          },
+          {
+            "evidence": [
+              "1cd4060a347846c6a08abd4b8c0c8248:evt-002-robust-verification"
+            ],
+            "instruction": "Parse the file with the csv module using delimiter=';' (not the default comma) to split fields correctly."
+          },
+          {
+            "evidence": [
+              "1cd4060a347846c6a08abd4b8c0c8248:evt-001-naive-failure",
+              "1cd4060a347846c6a08abd4b8c0c8248:evt-002-robust-verification"
+            ],
+            "instruction": "Read the header row and access monetary columns such as 'total_usd' from each row dict; confirm the column exists before summing."
+          },
+          {
+            "evidence": [
+              "1cd4060a347846c6a08abd4b8c0c8248:evt-002-robust-verification"
+            ],
+            "instruction": "Parse the 'total_usd' values with Decimal to preserve monetary precision rather than using float."
+          }
+        ],
+        "summary": "When importing a CSV-style invoice file that begins with a UTF-8 BOM and uses semicolons as field separators, read it with the csv module specifying encoding='utf-8-sig' and delimiter=';', and parse monetary fields with Decimal. This combination successfully imported the synthetic invoice fixture in the observed run, while a naive approach that assumed a plain comma-separated header without BOM raised KeyError: 'total_usd'.",
+        "title": "Import semicolon invoices with a BOM"
+      },
+      "evaluation": {
+        "actor": "hermes-evaluator",
+        "applicability": 2,
+        "completeness": 3,
+        "contradictions": 4,
+        "evaluator_version": "hermes-demo-rubric-v1",
+        "evidence": [
+          "1cd4060a347846c6a08abd4b8c0c8248:evt-001-naive-failure",
+          "1cd4060a347846c6a08abd4b8c0c8248:evt-002-robust-verification"
+        ],
+        "rationale": "Each step is tied to a concrete terminal event: evt-002-robust-verification shows the robust parser exits 0 with 3 rows totalling 125.50 USD, and evt-001-naive-failure shows the naive comma/no-BOM parser raising KeyError on 'total_usd' \u2014 the failure is consistent with the diagnosis (BOM hidden the first header column, and a comma dialect could not split semicolon-separated fields, so the DictReader header row was malformed). The proposal's checks and limitations honestly bound applicability to BOM-prefixed semicolon invoices; broader shapes and currencies are flagged untested. Steps (utf-8-sig, delimiter=';', header access, Decimal) align one-to-one with the cited events and the observed stderr/stdout. No internal inconsistency between the failure, the verification, and the summary. Confidence reflects evidence quality (a single 3-row synthetic fixture with one failure/one success contrast), not runtime performance.",
+        "support": 3,
+        "trusted": false,
+        "verdict": "pass"
+      },
+      "freshness": "current",
+      "hash": "9740dbde82786ea5098db09138932bf7cc4f4203f35c0bac8820492a56309ec5",
+      "id": "5c9ac60ad376433081b39c1ea5928f67@1",
+      "job_id": "fdf9576d84ef43778ccba4083bb86d14",
+      "number": 1,
+      "proposer": "hermes-worker",
+      "skill_id": "5c9ac60ad376433081b39c1ea5928f67",
+      "state": "active",
+      "task": "invoice-import",
+      "validation": "evidence_supported"
+    },
+    {
+      "checks": {
+        "complete_run": true,
+        "instruction_screen": true,
+        "no_conflict": true,
+        "references": true
+      },
+      "confidence": 60,
+      "created": 1791396848.1865256,
+      "data": {
+        "applicability": [
+          "Invoice files whose first bytes are a UTF-8 byte-order mark (BOM)",
+          "Invoice files that use ';' as the field delimiter",
+          "Invoice files that contain a literal 'total_usd' column to be summed"
+        ],
+        "checks": [
+          "Verify the parser loads without raising KeyError on the literal 'total_usd' column.",
+          "Verify that the import reports the same row count as the input (3 rows on the observed fixture).",
+          "Verify that the summed 'total_usd' equals the expected total (125.50 USD on the observed fixture)."
+        ],
+        "decision": "revise",
+        "dependencies": {},
+        "limitations": [
+          "Reuse was re-run on the same synthetic 3-row invoice fixture that produced the original evidence; no held-out, larger, or differently shaped invoice file has been exercised, so success on a new file is not yet demonstrated.",
+          "The BOM, the ';' delimiter, and the literal 'total_usd' column name are the only shape that was observed; equivalent monetary columns, other currencies, comma- or tab-delimited files, BOM-less UTF-8, or non-UTF-8 encodings have not been validated by this skill and should not be assumed to work.",
+          "All observed runs (origin 1cd4060a... and fresh-session reuse a3712a96...) were performed by the same agent family on the same fixture; this is a same-fixture reuse, not a generalization to new data."
+        ],
+        "merged_from": [],
+        "skill_id": "5c9ac60ad376433081b39c1ea5928f67",
+        "steps": [
+          {
+            "evidence": [
+              "1cd4060a347846c6a08abd4b8c0c8248:evt-002-robust-verification",
+              "a3712a96c9fc46808a67957b3e78bf65:evt-invoice-import-skill-use"
+            ],
+            "instruction": "Open the invoice file with encoding='utf-8-sig' so the leading UTF-8 BOM is stripped before any header parsing."
+          },
+          {
+            "evidence": [
+              "1cd4060a347846c6a08abd4b8c0c8248:evt-002-robust-verification",
+              "a3712a96c9fc46808a67957b3e78bf65:evt-invoice-import-skill-use"
+            ],
+            "instruction": "Parse the file with the csv module using delimiter=';' (not the default comma) to split fields correctly."
+          },
+          {
+            "evidence": [
+              "1cd4060a347846c6a08abd4b8c0c8248:evt-001-naive-failure",
+              "1cd4060a347846c6a08abd4b8c0c8248:evt-002-robust-verification",
+              "a3712a96c9fc46808a67957b3e78bf65:evt-invoice-import-skill-use"
+            ],
+            "instruction": "Access the literal 'total_usd' key on each DictReader row to read the monetary value; do not assume any equivalent or alias column name is present."
+          },
+          {
+            "evidence": [
+              "1cd4060a347846c6a08abd4b8c0c8248:evt-002-robust-verification",
+              "a3712a96c9fc46808a67957b3e78bf65:evt-invoice-import-skill-use"
+            ],
+            "instruction": "Parse the 'total_usd' values with Decimal to preserve monetary precision rather than using float."
+          }
+        ],
+        "summary": "When the input is a CSV-style invoice file that begins with a UTF-8 byte-order mark and uses ';' as the field delimiter, open it with encoding='utf-8-sig' and parse it with csv.DictReader(delimiter=';'), then sum the literal 'total_usd' column using Decimal. The same recipe passed in both the originating worker run (1cd4060a...) and a fresh-session reuse run (a3712a96...) on the same 3-row synthetic fixture, while a naive comma/no-BOM attempt in the originating run raised KeyError: 'total_usd'. No other field names, delimiters, encodings, currencies, or fixtures were exercised.",
+        "title": "Import semicolon invoices with a BOM"
+      },
+      "evaluation": {
+        "actor": "hermes-evaluator",
+        "applicability": 2,
+        "completeness": 3,
+        "contradictions": 4,
+        "evaluator_version": "hermes-demo-rubric-v1",
+        "evidence": [
+          "1cd4060a347846c6a08abd4b8c0c8248:evt-001-naive-failure",
+          "1cd4060a347846c6a08abd4b8c0c8248:evt-002-robust-verification",
+          "a3712a96c9fc46808a67957b3e78bf65:evt-invoice-import-skill-use"
+        ],
+        "rationale": "Each of the four steps is tied to concrete terminal events. evt-001-naive-failure shows the naive comma/no-BOM parser raising KeyError: 'total_usd' (exit=1) on the same 3-row fixture, which is consistent with the dual diagnosis in the summary: a leading UTF-8 BOM would have hidden the first header column ('\\ufefftotal_usd' rather than 'total_usd'), and the default comma dialect could not split semicolon-separated fields, leaving DictReader with a malformed single-field header. evt-002-robust-verification shows the corrected recipe (encoding='utf-8-sig', csv.DictReader(delimiter=';'), Decimal) passing with 3 rows totalling 125.50 USD (exit=0). evt-invoice-import-skill-use independently corroborates the same recipe passing in a fresh-session reuse run (a3712a96...) with the same PASS output, on the same fixture. The v2 revision tightens applicability relative to v1 by removing the 'or equivalent monetary' hedge and explicitly requiring the literal 'total_usd' column, which is appropriate given only that column name was observed. Limitations honestly bound the result to a single 3-row synthetic fixture, one agent family, and the BOM + ';' + literal 'total_usd' shape; no held-out, larger, or differently shaped file was exercised, which is why support is 3 rather than 4 and applicability is 2 rather than 3. There are no internal contradictions: the failure event, the verification event, the fresh-session reuse event, the four steps, the three applicability conditions, and the three checks all agree, and the v2 summary is consistent with v1's summary except for the tightened column-name claim. Confidence reflects evidence quality (one fixture, one failure/one success contrast, one fresh-session reuse) and not runtime performance; the skill does not make any performance claim and should not be evaluated on that axis.",
+        "support": 3,
+        "trusted": true,
+        "verdict": "pass"
+      },
+      "freshness": "current",
+      "hash": "bb5eddd51f8d316c1b63ec0150a49f6779c2bb6d91b820e825305ef3c241ba47",
+      "id": "5c9ac60ad376433081b39c1ea5928f67@2",
+      "job_id": "6d656fc8d0ad42ef83cb6392d13d79e0",
+      "number": 2,
+      "proposer": "hermes-worker",
+      "skill_id": "5c9ac60ad376433081b39c1ea5928f67",
+      "state": "superseded",
+      "task": "invoice-import",
+      "validation": "evidence_supported"
+    }
+  ],
+  "audit": [
+    {
+      "seq": 13,
+      "at": 1791397099.318872,
+      "actor": "human",
+      "action": "review",
+      "body": {
+        "action": "rollback",
+        "hash": "9740dbde82786ea5098db09138932bf7cc4f4203f35c0bac8820492a56309ec5",
+        "reason": "",
+        "version": "5c9ac60ad376433081b39c1ea5928f67@1"
+      }
+    },
+    {
+      "seq": 12,
+      "at": 1791397099.3185713,
+      "actor": "human",
+      "action": "rollback",
+      "body": {
+        "hash": "9740dbde82786ea5098db09138932bf7cc4f4203f35c0bac8820492a56309ec5",
+        "policy": 2,
+        "version": "5c9ac60ad376433081b39c1ea5928f67@1"
+      }
+    },
+    {
+      "seq": 11,
+      "at": 1791397092.723002,
+      "actor": "human",
+      "action": "review",
+      "body": {
+        "action": "approve",
+        "hash": "bb5eddd51f8d316c1b63ec0150a49f6779c2bb6d91b820e825305ef3c241ba47",
+        "reason": "",
+        "version": "5c9ac60ad376433081b39c1ea5928f67@2"
+      }
+    },
+    {
+      "seq": 10,
+      "at": 1791397092.7228043,
+      "actor": "human",
+      "action": "approve",
+      "body": {
+        "hash": "bb5eddd51f8d316c1b63ec0150a49f6779c2bb6d91b820e825305ef3c241ba47",
+        "policy": 2,
+        "version": "5c9ac60ad376433081b39c1ea5928f67@2"
+      }
+    },
+    {
+      "seq": 9,
+      "at": 1791396970.257145,
+      "actor": "hermes-evaluator",
+      "action": "evaluated",
+      "body": {
+        "assessment": {
+          "actor": "hermes-evaluator",
+          "applicability": 2,
+          "completeness": 3,
+          "contradictions": 4,
+          "evaluator_version": "hermes-demo-rubric-v1",
+          "evidence": [
+            "1cd4060a347846c6a08abd4b8c0c8248:evt-001-naive-failure",
+            "1cd4060a347846c6a08abd4b8c0c8248:evt-002-robust-verification",
+            "a3712a96c9fc46808a67957b3e78bf65:evt-invoice-import-skill-use"
+          ],
+          "rationale": "Each of the four steps is tied to concrete terminal events. evt-001-naive-failure shows the naive comma/no-BOM parser raising KeyError: 'total_usd' (exit=1) on the same 3-row fixture, which is consistent with the dual diagnosis in the summary: a leading UTF-8 BOM would have hidden the first header column ('\\ufefftotal_usd' rather than 'total_usd'), and the default comma dialect could not split semicolon-separated fields, leaving DictReader with a malformed single-field header. evt-002-robust-verification shows the corrected recipe (encoding='utf-8-sig', csv.DictReader(delimiter=';'), Decimal) passing with 3 rows totalling 125.50 USD (exit=0). evt-invoice-import-skill-use independently corroborates the same recipe passing in a fresh-session reuse run (a3712a96...) with the same PASS output, on the same fixture. The v2 revision tightens applicability relative to v1 by removing the 'or equivalent monetary' hedge and explicitly requiring the literal 'total_usd' column, which is appropriate given only that column name was observed. Limitations honestly bound the result to a single 3-row synthetic fixture, one agent family, and the BOM + ';' + literal 'total_usd' shape; no held-out, larger, or differently shaped file was exercised, which is why support is 3 rather than 4 and applicability is 2 rather than 3. There are no internal contradictions: the failure event, the verification event, the fresh-session reuse event, the four steps, the three applicability conditions, and the three checks all agree, and the v2 summary is consistent with v1's summary except for the tightened column-name claim. Confidence reflects evidence quality (one fixture, one failure/one success contrast, one fresh-session reuse) and not runtime performance; the skill does not make any performance claim and should not be evaluated on that axis.",
+          "support": 3,
+          "trusted": true,
+          "verdict": "pass"
+        },
+        "confidence": 60,
+        "version": "5c9ac60ad376433081b39c1ea5928f67@2"
+      }
+    },
+    {
+      "seq": 8,
+      "at": 1791396952.2728736,
+      "actor": "local-human",
+      "action": "policy_changed",
+      "body": {
+        "auto_distill": true,
+        "lease_seconds": 120,
+        "max_attempts": 3,
+        "max_events_per_run": 500,
+        "max_jobs_per_run": 6,
+        "mode": "automatic",
+        "revision": 2,
+        "threshold": 90,
+        "trusted_evaluators": [
+          "hermes-evaluator"
+        ]
+      }
+    },
+    {
+      "seq": 7,
+      "at": 1791396848.1871383,
+      "actor": "hermes-worker",
+      "action": "skill_proposed",
+      "body": {
+        "hash": "bb5eddd51f8d316c1b63ec0150a49f6779c2bb6d91b820e825305ef3c241ba47",
+        "version": "5c9ac60ad376433081b39c1ea5928f67@2"
+      }
+    },
+    {
+      "seq": 6,
+      "at": 1791396736.0985358,
+      "actor": "hermes-fresh",
+      "action": "retrieved",
+      "body": {
+        "version": "5c9ac60ad376433081b39c1ea5928f67@1"
+      }
+    },
+    {
+      "seq": 5,
+      "at": 1791396732.3139343,
+      "actor": "hermes-fresh",
+      "action": "discovery",
+      "body": {
+        "query": "invoice import CSV",
+        "task": "invoice-import",
+        "versions": [
+          "5c9ac60ad376433081b39c1ea5928f67@1"
+        ]
+      }
+    },
+    {
+      "seq": 4,
+      "at": 1791396662.593517,
+      "actor": "human",
+      "action": "review",
+      "body": {
+        "action": "approve",
+        "hash": "9740dbde82786ea5098db09138932bf7cc4f4203f35c0bac8820492a56309ec5",
+        "reason": "",
+        "version": "5c9ac60ad376433081b39c1ea5928f67@1"
+      }
+    },
+    {
+      "seq": 3,
+      "at": 1791396662.5932434,
+      "actor": "human",
+      "action": "approve",
+      "body": {
+        "hash": "9740dbde82786ea5098db09138932bf7cc4f4203f35c0bac8820492a56309ec5",
+        "policy": 1,
+        "version": "5c9ac60ad376433081b39c1ea5928f67@1"
+      }
+    },
+    {
+      "seq": 2,
+      "at": 1791396445.1966374,
+      "actor": "hermes-evaluator",
+      "action": "evaluated",
+      "body": {
+        "confidence": 60,
+        "version": "5c9ac60ad376433081b39c1ea5928f67@1"
+      }
+    },
+    {
+      "seq": 1,
+      "at": 1791396381.3248365,
+      "actor": "hermes-worker",
+      "action": "skill_proposed",
+      "body": {
+        "hash": "9740dbde82786ea5098db09138932bf7cc4f4203f35c0bac8820492a56309ec5",
+        "version": "5c9ac60ad376433081b39c1ea5928f67@1"
+      }
+    }
+  ]
+}

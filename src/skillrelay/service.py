@@ -136,8 +136,9 @@ class Service:
             )
             existing = [e for e in self.store.all(db, "event") if e["id"] == key]
             if existing:
-                if "recorded_at" in existing[0]:
-                    body["recorded_at"] = existing[0]["recorded_at"]
+                for key in ("recorded_at", "skill_state_at_report"):
+                    if key in existing[0]:
+                        body[key] = existing[0][key]
                 if existing[0] != body:
                     raise ValueError("Event ID reused with different content")
                 return existing[0]
@@ -150,8 +151,8 @@ class Service:
                 raise ValueError("Causal edges must reference existing events in this workflow")
             if event.kind == "skill_use":
                 v = self.store.get(db, "version", event.skill_version)
-                if v["state"] != "active":
-                    raise ValueError("Applied skill version must be active")
+                # Historical use is evidence even if the version was since withdrawn.
+                body["skill_state_at_report"] = v["state"]
             body["recorded_at"] = time.time()
             self.store.put(db, "event", key, body)
             run["revision"] += 1
@@ -598,6 +599,8 @@ class Service:
             raise ValueError("Unknown review action")
         with self.store.connect() as db:
             v = self.store.get(db, "version", version_id)
+            if v["state"] in {"revoked", "rejected", "changes_requested"} and action != "revoke":
+                raise ValueError("This version is closed; propose and evaluate a new version")
             if v["hash"] != expected_hash:
                 raise ValueError("Review must reference the exact content hash")
             if action in {"approve", "rollback"}:
