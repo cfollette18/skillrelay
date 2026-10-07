@@ -134,6 +134,8 @@ class Service:
             )
             existing = [e for e in self.store.all(db, "event") if e["id"] == key]
             if existing:
+                if "recorded_at" in existing[0]:
+                    body["recorded_at"] = existing[0]["recorded_at"]
                 if existing[0] != body:
                     raise ValueError("Event ID reused with different content")
                 return existing[0]
@@ -148,6 +150,7 @@ class Service:
                 v = self.store.get(db, "version", event.skill_version)
                 if v["state"] != "active":
                     raise ValueError("Applied skill version must be active")
+            body["recorded_at"] = time.time()
             self.store.put(db, "event", key, body)
             run["revision"] += 1
             self.store.put(db, "run", run_id, run)
@@ -191,6 +194,28 @@ class Service:
             self._invalidate(db, run_id)
             self.audit(db, reviewer, "outcome_verified", run)
             return self._enqueue(db, run)
+
+    def outcome_check(self, actor, run_id, outcome, evidence, checker_version):
+        if outcome not in OUTCOMES or not evidence or not checker_version:
+            raise ValueError("Outcome, evidence and checker version are required")
+        with self.store.connect() as db:
+            p = self.store.get(db, "policy", "workspace")
+            run = self.store.get(db, "run", run_id)
+            if actor not in p["trusted_evaluators"] or actor == run["agent"]:
+                raise PermissionError("A separately trusted evaluator must check the outcome")
+            ids = {e["id"] for e in self.store.all(db, "event") if e["run_id"] == run_id}
+            if not set(evidence) <= ids:
+                raise ValueError("Checker evidence must belong to this run")
+            run.update(
+                outcome=outcome,
+                outcome_source="external_evaluator:" + actor,
+                outcome_check=clean({"evidence": evidence, "version": checker_version}),
+                revision=run["revision"] + 1,
+            )
+            self.store.put(db, "run", run_id, run)
+            self._invalidate(db, run_id)
+            self.audit(db, actor, "outcome_checked", run)
+            return {"job": self._enqueue(db, run), "outcome_source": run["outcome_source"]}
 
     def _invalidate(self, db, run_id):
         """Late/corrected evidence withdraws prior qualifications, never mutates content."""
@@ -275,6 +300,7 @@ class Service:
                     worker=actor,
                     token=identity(),
                     lease_until=time.time() + p["lease_seconds"],
+                    claimed_at=time.time(),
                     attempts=job["attempts"] + 1,
                 )
                 self.store.put(db, "job", job["id"], job)
@@ -297,13 +323,25 @@ class Service:
             raise ValueError("Expired, stale, or foreign learning lease")
         return j
 
+    def renew(self, actor, job_id, token):
+        with self.store.connect() as db:
+            j = self._leased(db, actor, job_id, token)
+            ceiling = j.get("claimed_at", j["created"]) + 600
+            if ceiling <= time.time():
+                raise ValueError("Learning attempt time budget exhausted")
+            j["lease_until"] = min(time.time() + 120, ceiling)
+            self.store.put(db, "job", j["id"], j)
+            return {"lease_until": j["lease_until"]}
+
     def finish_job(self, actor, job_id, token, decision, reason):
         if decision not in {"no_change", "investigate", "error"}:
             raise ValueError("Expected no_change, investigate or error")
         with self.store.connect() as db:
             j = self._leased(db, actor, job_id, token)
             j.update(
-                status="queued" if decision == "error" else "completed",
+                status=("failed" if j["attempts"] >= 3 else "queued")
+                if decision == "error"
+                else "completed",
                 decision=decision,
                 reason=clean(reason),
                 token=None,
@@ -333,6 +371,22 @@ class Service:
                 raise ValueError("Existing skill requires revise or merge")
             if peers and peers[0]["task"] != j["task"]:
                 raise ValueError("Cannot revise another use case")
+            if proposal.decision == "merge":
+                if not proposal.merged_from:
+                    raise ValueError("Merge requires exact merged_from version IDs")
+                sources = [self.store.get(db, "version", key) for key in proposal.merged_from]
+                if any(source["task"] != j["task"] for source in sources):
+                    raise ValueError("Merge sources must share the task namespace")
+                checks["merge_scope"] = all(
+                    set(source["data"]["applicability"]) <= set(data["applicability"])
+                    and all(
+                        data["dependencies"].get(k) == val
+                        for k, val in source["data"]["dependencies"].items()
+                    )
+                    for source in sources
+                )
+            elif proposal.merged_from:
+                raise ValueError("merged_from is only supported for merge decisions")
             duplicate = next(
                 (v for v in versions if v["task"] == j["task"] and v["data"] == data), None
             )
@@ -342,6 +396,7 @@ class Service:
                 return duplicate
             checks["no_conflict"] = not any(
                 v["skill_id"] != sid
+                and v["id"] not in proposal.merged_from
                 and v["task"] == j["task"]
                 and v["state"] == "active"
                 and v["data"]["title"].casefold() == data["title"].casefold()
@@ -446,9 +501,14 @@ class Service:
             current
             and v["state"] not in {"revoked", "rejected", "changes_requested"}
             and v["freshness"] == "current"
+            and all(
+                v["data"]["dependencies"].get(dep["name"], dep["version"]) == dep["version"]
+                for dep in self.store.all(db, "dependency")
+            )
             and all(v["checks"].values())
             and not any(
                 other["skill_id"] != v["skill_id"]
+                and other["id"] not in v["data"].get("merged_from", [])
                 and other["task"] == v["task"]
                 and other["state"] == "active"
                 and other["data"]["title"].casefold() == v["data"]["title"].casefold()
@@ -466,6 +526,11 @@ class Service:
             if other["skill_id"] == v["skill_id"] and other["state"] == "active":
                 other["state"] = "superseded"
                 self.store.put(db, "version", other["id"], other)
+        for key in v["data"].get("merged_from", []):
+            source = self.store.get(db, "version", key)
+            if source["id"] != v["id"] and source["state"] == "active":
+                source["state"] = "merged"
+                self.store.put(db, "version", key, source)
         v["state"] = "active"
         self.audit(
             db,
@@ -505,6 +570,9 @@ class Service:
 
     def dependency(self, actor, name, version, confirmed=True):
         with self.store.connect() as db:
+            self.store.put(
+                db, "dependency", name, {"name": name, "version": version, "confirmed": confirmed}
+            )
             affected = []
             for v in self.store.all(db, "version"):
                 old = v["data"]["dependencies"].get(name)

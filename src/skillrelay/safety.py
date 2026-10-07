@@ -3,7 +3,10 @@
 import re
 
 SECRETS = [
-    re.compile(r"(?i)\b(?:api[_ -]?key|password|secret|access[_ -]?token)\s*[:=]\s*[^\s,;]+"),
+    re.compile(
+        r"(?i)\b(?:api[_ -]?key|password|secret|access[_ -]?token)"
+        r"[\"\']?\s*[:=]\s*[\"\']?[^\s,;\"\']+"
+    ),
     re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*"),
     re.compile(r"\b(?:sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9]{15,}|AKIA[A-Z0-9]{16})\b"),
     re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
@@ -29,7 +32,12 @@ def clean(value):
     if isinstance(value, list):
         return [clean(x) for x in value]
     if isinstance(value, dict):
-        return {k: clean(v) for k, v in value.items()}
+        return {
+            k: "[REDACTED]"
+            if re.search(r"(?i)(password|secret|api[_-]?key|access[_-]?token|authorization)", k)
+            else clean(v)
+            for k, v in value.items()
+        }
     return value
 
 

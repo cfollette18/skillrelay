@@ -54,6 +54,13 @@ def create_server(service: Service, agent="agent"):
         return service.finish(actor(), run_id, outcome, workflow_outcome)
 
     @server.tool(structured_output=True)
+    def report_outcome_check(
+        run_id: str, outcome: str, evidence: list[str], checker_version: str
+    ) -> dict[str, Any]:
+        """Attach an independent outcome check. Requires a configured trusted evaluator identity."""
+        return service.outcome_check(actor(), run_id, outcome, evidence, checker_version)
+
+    @server.tool(structured_output=True)
     def claim_learning_job(kind: str = "distill") -> dict[str, Any]:
         """Lease a job including fixed evidence. Separate agent required for evaluate jobs.
 
@@ -71,9 +78,35 @@ def create_server(service: Service, agent="agent"):
         return service.propose(actor(), job_id, token, proposal)
 
     @server.tool(structured_output=True)
+    def propose_skill_json(job_id: str, token: str, proposal_json: str) -> dict[str, Any]:
+        """JSON-string alternative for clients that cannot encode nested tool arguments.
+
+        proposal_json is a JSON object with title, summary, applicability (string array),
+        steps (array of {instruction, evidence: [event IDs]}), checks (string array),
+        limitations (string array), dependencies (object). Same validation and policy apply.
+        """
+        return service.propose(actor(), job_id, token, Proposal.model_validate_json(proposal_json))
+
+    @server.tool(structured_output=True)
     def evaluate_skill(job_id: str, token: str, assessment: Assessment) -> dict[str, Any]:
         """Submit cited rubric levels. Server computes confidence and enforces current policy."""
         return service.evaluate(actor(), job_id, token, assessment)
+
+    @server.tool(structured_output=True)
+    def evaluate_skill_json(job_id: str, token: str, assessment_json: str) -> dict[str, Any]:
+        """JSON-string alternative for evaluate_skill, with identical strict validation.
+
+        Fields: support, applicability, completeness, contradictions (integers 0-4),
+        verdict (pass/fail/unknown), rationale, evidence (event-ID array), evaluator_version.
+        """
+        return service.evaluate(
+            actor(), job_id, token, Assessment.model_validate_json(assessment_json)
+        )
+
+    @server.tool(structured_output=True)
+    def renew_learning_lease(job_id: str, token: str) -> dict[str, Any]:
+        """Extend a live owned lease, bounded by a ten-minute attempt budget."""
+        return service.renew(actor(), job_id, token)
 
     @server.tool(structured_output=True)
     def finish_learning_job(job_id: str, token: str, decision: str, reason: str) -> dict[str, Any]:

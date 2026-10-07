@@ -1,4 +1,5 @@
 import json
+import re
 
 
 def markdown(version: dict) -> str:
@@ -6,8 +7,12 @@ def markdown(version: dict) -> str:
     d = version["data"]
     lines = [
         "---",
-        "name: " + json.dumps(d["title"]),
-        "description: " + json.dumps(d["summary"]),
+        "name: "
+        + json.dumps(
+            re.sub(r"[^a-z0-9]+", "-", d["title"].lower()).strip("-")[:64].rstrip("-")
+            or "skill-" + version["skill_id"]
+        ),
+        "description: " + json.dumps(d["summary"][:1024]),
         "---",
         "",
         f"# {d['title']}",

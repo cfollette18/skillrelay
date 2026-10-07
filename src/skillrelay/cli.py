@@ -18,6 +18,12 @@ def main():
     )
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)
+    worker = sub.add_parser("work", help="Drive a configured external learning agent")
+    worker.add_argument("--command-json", required=True, help='JSON argv array with "{prompt}"')
+    worker.add_argument("--kind", choices=["distill", "evaluate"], default="distill")
+    worker.add_argument("--once", action="store_true")
+    worker.add_argument("--max-invocations", type=int, default=20)
+    worker.add_argument("--timeout", type=int, default=300)
     sub.add_parser("status")
     credential = sub.add_parser(
         "credential", help="Print a local credential for setup; keep private"
@@ -56,6 +62,20 @@ def main():
         (home / "config.json").write_text(json.dumps(config))
         print(
             f"Agent {args.name} created; restart HTTP server to load credentials. Token:\n{token}"
+        )
+    elif args.command == "work":
+        from .worker import drive
+
+        command = json.loads(args.command_json)
+        if not isinstance(command, list) or not all(isinstance(x, str) for x in command):
+            parser.error("--command-json must be an array of strings")
+        drive(
+            service,
+            command,
+            args.kind,
+            args.once,
+            max_invocations=args.max_invocations,
+            timeout=args.timeout,
         )
     elif args.command == "policy":
         print(

@@ -23,6 +23,7 @@ class Event(Strict):
     action: str = Field(min_length=1, max_length=4000)
     result: str = Field(default="", max_length=4000)
     tool: str = Field(default="", max_length=200)
+    duration_ms: float | None = Field(default=None, ge=0, le=3600000)
     success: bool | None = None
     causes: list[str] = Field(default_factory=list, max_length=50)
     recipient: str = Field(default="", max_length=200)
@@ -43,6 +44,7 @@ class Proposal(Strict):
     limitations: list[str] = Field(default_factory=list, max_length=30)
     dependencies: dict[str, str] = Field(default_factory=dict)
     decision: Literal["create", "revise", "merge"] = "create"
+    merged_from: list[str] = Field(default_factory=list, max_length=20)
     skill_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
 
 
