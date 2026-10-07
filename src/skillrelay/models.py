@@ -9,7 +9,17 @@ class Strict(BaseModel):
 
 class Event(Strict):
     event_id: str = Field(min_length=1, max_length=100)
-    kind: Literal["step", "failure", "verification", "handoff", "message", "selection", "join", "termination", "skill_use"] = "step"
+    kind: Literal[
+        "step",
+        "failure",
+        "verification",
+        "handoff",
+        "message",
+        "selection",
+        "join",
+        "termination",
+        "skill_use",
+    ] = "step"
     action: str = Field(min_length=1, max_length=4000)
     result: str = Field(default="", max_length=4000)
     tool: str = Field(default="", max_length=200)
@@ -38,6 +48,7 @@ class Proposal(Strict):
 
 class Assessment(Strict):
     """Rubric levels, not an agent-supplied probability."""
+
     support: int = Field(ge=0, le=4)
     applicability: int = Field(ge=0, le=4)
     completeness: int = Field(ge=0, le=4)

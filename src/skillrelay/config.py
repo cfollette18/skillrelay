@@ -1,4 +1,5 @@
 """A workspace has its own database and a separate reviewer credential."""
+
 import json
 import os
 import secrets
@@ -15,6 +16,11 @@ def initialize(home: Path) -> dict:
     if not path.exists():
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w") as f:
-            json.dump({"reviewer_token": secrets.token_urlsafe(32),
-                       "agent_token": secrets.token_urlsafe(32)}, f)
+            json.dump(
+                {
+                    "reviewer_token": secrets.token_urlsafe(32),
+                    "agent_token": secrets.token_urlsafe(32),
+                },
+                f,
+            )
     return json.loads(path.read_text())

@@ -1,4 +1,5 @@
 """SQLite persistence; each mutation is serialized and crash-safe."""
+
 import json
 import sqlite3
 from contextlib import contextmanager
@@ -14,7 +15,7 @@ class Store:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.path = path
         with self.connect() as db:
-            db.executescript('''
+            db.executescript("""
             PRAGMA journal_mode=WAL;
             CREATE TABLE IF NOT EXISTS records (
                 kind TEXT NOT NULL, id TEXT NOT NULL, body TEXT NOT NULL,
@@ -23,7 +24,7 @@ class Store:
                 seq INTEGER PRIMARY KEY, at REAL NOT NULL, actor TEXT NOT NULL,
                 action TEXT NOT NULL, body TEXT NOT NULL);
             PRAGMA user_version=1;
-            ''')
+            """)
 
     @contextmanager
     def connect(self):
@@ -47,10 +48,15 @@ class Store:
 
     @staticmethod
     def put(db, kind, key, value):
-        db.execute("INSERT INTO records VALUES(?,?,?) ON CONFLICT(kind,id) DO UPDATE SET body=excluded.body",
-                   (kind, key, encoded(value)))
+        db.execute(
+            "INSERT INTO records VALUES(?,?,?) "
+            "ON CONFLICT(kind,id) DO UPDATE SET body=excluded.body",
+            (kind, key, encoded(value)),
+        )
 
     @staticmethod
     def all(db, kind):
-        return [json.loads(r[0]) for r in db.execute(
-            "SELECT body FROM records WHERE kind=? ORDER BY rowid", (kind,))]
+        return [
+            json.loads(r[0])
+            for r in db.execute("SELECT body FROM records WHERE kind=? ORDER BY rowid", (kind,))
+        ]
