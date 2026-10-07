@@ -9,3 +9,6 @@ __pycache__/
 *.db-wal
 dist/
 *.egg-info/
+.demo/
+artifacts/private/
+playwright-report/

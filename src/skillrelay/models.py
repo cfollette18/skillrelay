@@ -43,7 +43,7 @@ class Proposal(Strict):
     limitations: list[str] = Field(default_factory=list, max_length=30)
     dependencies: dict[str, str] = Field(default_factory=dict)
     decision: Literal["create", "revise", "merge"] = "create"
-    skill_id: str | None = None
+    skill_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
 
 
 class Assessment(Strict):

@@ -7,6 +7,7 @@ from mcp.server import MCPServer
 
 from .models import Assessment, Event, Proposal
 from .service import Service
+from .skills import markdown
 
 principal = ContextVar("skillrelay_principal", default="agent")
 
@@ -87,7 +88,8 @@ def create_server(service: Service, agent="agent"):
     @server.tool(structured_output=True)
     def get_skill(version_id: str) -> dict[str, Any]:
         """Retrieve an exact active version. Report a skill_use event when actually applied."""
-        return service.get_skill(actor(), version_id)
+        v = service.get_skill(actor(), version_id)
+        return {**v, "skill_markdown": markdown(v)}
 
     @server.tool(structured_output=True)
     def learning_status() -> dict[str, Any]:
@@ -97,5 +99,10 @@ def create_server(service: Service, agent="agent"):
             "policy": s["policy"],
             "jobs": [{k: j[k] for k in ("id", "kind", "status", "attempts")} for j in s["job"]],
         }
+
+    @server.resource("skill://{skill_id}/{version}")
+    def skill_resource(skill_id: str, version: str) -> str:
+        """Read an exact active SKILL.md through an MCP resource."""
+        return markdown(service.get_skill(actor(), f"{skill_id}@{version}"))
 
     return server

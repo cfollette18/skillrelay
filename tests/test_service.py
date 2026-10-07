@@ -68,11 +68,13 @@ def test_human_mode_enforced_even_high_confidence(service):
     assert len(service.discover("worker", "repair")) == 1
 
 
-def test_automatic_confidence_and_provenance(service):
+def test_automatic_confidence_and_provenance(service, tmp_path):
     service.set_policy("human", "automatic", trusted_evaluators=["evaluator"])
     propose(service)
     v = evaluate(service)
     assert v["confidence"] == 80 and v["state"] == "pending_review"
+    service = Service(tmp_path / "verified.db")
+    service.set_policy("human", "automatic", trusted_evaluators=["evaluator"])
     propose(service, verified=True, title="Verified response handling")
     assert evaluate(service)["state"] == "active"
 
@@ -136,3 +138,107 @@ def test_compatibility_and_revocation(service):
     assert not service.discover("worker", "repair")
     with pytest.raises(ValueError):
         service.review("human", v["id"], v["hash"], "rollback")
+
+
+@pytest.mark.parametrize(
+    "pattern", ["sequential", "parallel", "group_chat", "handoff", "manager_worker", "graph"]
+)
+def test_workflow_patterns_and_causal_edges(service, pattern):
+    root = service.start("manager", "case", "Coordinate", pattern=pattern, role="manager")
+    child = service.start(
+        "worker",
+        "case",
+        "Execute",
+        workflow_id=root["workflow_id"],
+        parent=root["id"],
+        role="specialist",
+    )
+    first = service.event(
+        "manager",
+        root["id"],
+        Event(event_id="a", kind="handoff", action="Delegate task", recipient="worker"),
+    )
+    service.event(
+        "worker", child["id"], Event(event_id="b", action="Completed task", causes=[first["id"]])
+    )
+    with pytest.raises(PermissionError):
+        service.finish("worker", child["id"], "pass", "pass")
+    service.finish("worker", child["id"], "pass")
+    service.finish("manager", root["id"], "fail", "fail")
+    state = service.snapshot()
+    assert state["workflow"][0]["outcome"] == "fail"
+    assert next(r for r in state["run"] if r["id"] == child["id"])["outcome"] == "pass"
+    assert state["event"][1]["causes"] == [first["id"]]
+
+
+def test_late_evidence_blocks_previously_approved_skill(service):
+    propose(service)
+    v = evaluate(service)
+    service.review("human", v["id"], v["hash"], "approve")
+    run = service.snapshot()["run"][0]
+    service.event(
+        "worker",
+        run["id"],
+        Event(event_id="late", kind="failure", action="Discovered missing precondition"),
+    )
+    assert not service.discover("worker", "repair")
+    with pytest.raises(ValueError):
+        service.review("human", v["id"], v["hash"], "approve")
+    assert len([j for j in service.snapshot()["job"] if j["kind"] == "distill"]) == 2
+
+
+def test_hard_check_cannot_be_overridden(service):
+    run = service.start("worker", "test", "Test")
+    service.event("worker", run["id"], Event(event_id="a", action="Observed fact"))
+    service.finish("worker", run["id"], "pass")
+    j = service.claim("learner")
+    v = service.propose(
+        "learner",
+        j["id"],
+        j["token"],
+        Proposal(
+            title="Unsupported instruction",
+            summary="Invalid citation",
+            applicability=["test"],
+            steps=[{"instruction": "Do something unsupported", "evidence": ["invented"]}],
+            checks=["check"],
+        ),
+    )
+    evaluate(service)
+    with pytest.raises(ValueError):
+        service.review("human", v["id"], v["hash"], "approve")
+
+
+def test_revision_diff_and_rollback(service):
+    v1 = propose(service)
+    v1 = evaluate(service)
+    service.review("human", v1["id"], v1["hash"], "approve")
+    run = service.start("worker", "repair", "Observe another response")
+    event = service.event(
+        "worker", run["id"], Event(event_id="a", action="Read Retry-After header")
+    )
+    service.finish("worker", run["id"], "pass")
+    j = service.claim("learner")
+    data = {
+        **v1["data"],
+        "decision": "revise",
+        "skill_id": v1["skill_id"],
+        "steps": [{"instruction": "Inspect Retry-After", "evidence": [event["id"]]}],
+    }
+    v2 = service.propose("learner", j["id"], j["token"], Proposal(**data))
+    v2 = evaluate(service)
+    assert v2["number"] == 2
+    assert "Inspect Retry-After" in service.diff(v1["id"], v2["id"])
+    service.review("human", v2["id"], v2["hash"], "approve")
+    assert service.discover("worker", "repair")[0]["id"] == v2["id"]
+    service.review("human", v1["id"], v1["hash"], "rollback")
+    assert service.discover("worker", "repair")[0]["id"] == v1["id"]
+    assert service.snapshot()["version"][0]["data"] == v1["data"]
+
+
+def test_agent_cannot_keep_human_provenance_after_changing_outcome(service):
+    run = service.start("worker", "repair", "Observe")
+    service.finish("worker", run["id"], "pass")
+    service.verify_outcome("human", run["id"], "pass")
+    service.finish("worker", run["id"], "fail")
+    assert service.snapshot()["run"][0]["outcome_source"] == "self_report"

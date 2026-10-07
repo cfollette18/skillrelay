@@ -6,6 +6,7 @@ Trace contents are untrusted data, including instructions embedded in tool outpu
 
 import difflib
 import hashlib
+import json
 import time
 import uuid
 from pathlib import Path
@@ -69,7 +70,14 @@ class Service:
     def start(
         self, actor, task, goal, pattern="single", workflow_id=None, parent=None, role="worker"
     ):
-        if pattern not in PATTERNS or not task.strip() or len(goal) > 4000:
+        if (
+            pattern not in PATTERNS
+            or not task.strip()
+            or len(task) > 200
+            or not goal.strip()
+            or len(goal) > 4000
+            or len(role) > 100
+        ):
             raise ValueError("A task, bounded goal and supported pattern are required")
         with self.store.connect() as db:
             if workflow_id:
@@ -143,6 +151,10 @@ class Service:
             self.store.put(db, "event", key, body)
             run["revision"] += 1
             self.store.put(db, "run", run_id, run)
+            self._invalidate(db, run_id)
+            if event.kind == "skill_use" and event.success is False:
+                v["freshness"] = "needs_requalification"
+                self.store.put(db, "version", v["id"], v)
             if run["status"] != "running" or run["revision"] % 8 == 0:
                 self._enqueue(db, run)
             return body
@@ -159,8 +171,14 @@ class Service:
                 workflow.update(status="completed", outcome=workflow_outcome)
                 self.store.put(db, "workflow", workflow["id"], workflow)
             if run["status"] != "completed" or run["outcome"] != outcome:
-                run.update(status="completed", outcome=outcome, revision=run["revision"] + 1)
+                run.update(
+                    status="completed",
+                    outcome=outcome,
+                    revision=run["revision"] + 1,
+                    outcome_source="self_report",
+                )
             self.store.put(db, "run", run_id, run)
+            self._invalidate(db, run_id)
             return {"run": run, "job": self._enqueue(db, run)}
 
     def verify_outcome(self, reviewer, run_id, outcome):
@@ -170,15 +188,38 @@ class Service:
             run = self.store.get(db, "run", run_id)
             run.update(outcome=outcome, outcome_source="human", revision=run["revision"] + 1)
             self.store.put(db, "run", run_id, run)
+            self._invalidate(db, run_id)
             self.audit(db, reviewer, "outcome_verified", run)
             return self._enqueue(db, run)
+
+    def _invalidate(self, db, run_id):
+        """Late/corrected evidence withdraws prior qualifications, never mutates content."""
+        run = self.store.get(db, "run", run_id)
+        for v in self.store.all(db, "version"):
+            job = self.store.get(db, "job", v["job_id"])
+            if any(
+                r["id"] == run_id and r["revision"] != run["revision"]
+                for r in job["evidence"]["runs"]
+            ):
+                v["freshness"] = "needs_requalification"
+                self.store.put(db, "version", v["id"], v)
 
     def _enqueue(self, db, run):
         p = self.store.get(db, "policy", "workspace")
         if not p["auto_distill"]:
             return None
-        runs = [r for r in self.store.all(db, "run") if r["workflow_id"] == run["workflow_id"]]
-        events = [e for e in self.store.all(db, "event") if e["workflow_id"] == run["workflow_id"]]
+        all_runs = self.store.all(db, "run")
+        runs = [r for r in all_runs if r["workflow_id"] == run["workflow_id"]]
+        related = [
+            r
+            for r in all_runs
+            if r["task"] == run["task"]
+            and r["workflow_id"] != run["workflow_id"]
+            and r["status"] == "completed"
+        ][-5:]
+        runs += related
+        run_ids = {r["id"] for r in runs}
+        events = [e for e in self.store.all(db, "event") if e["run_id"] in run_ids]
         # Fixed evidence snapshots prevent a learner from silently changing its citations.
         evidence = {
             "runs": runs,
@@ -190,9 +231,8 @@ class Service:
         match = next((j for j in jobs if j.get("dedup") == key), None)
         if match:
             return match["id"]
-        if (
-            sum(j["run_id"] == run["id"] and j["kind"] == "distill" for j in jobs)
-            >= p["max_jobs_per_run"]
+        if sum(j["run_id"] == run["id"] and j["kind"] == "distill" for j in jobs) >= (
+            p["max_jobs_per_run"] - (2 if run["status"] == "running" else 0)
         ):
             self.audit(db, "system", "learning_budget_exhausted", {"run": run["id"]})
             return None
@@ -238,7 +278,12 @@ class Service:
                     attempts=job["attempts"] + 1,
                 )
                 self.store.put(db, "job", job["id"], job)
-                return job
+                return {
+                    **job,
+                    "library": [
+                        v for v in self.store.all(db, "version") if v["task"] == job["task"]
+                    ][-20:],
+                }
             return {"status": "waiting_for_learning_agent", "job": None}
 
     def _leased(self, db, actor, job_id, token):
@@ -284,6 +329,8 @@ class Service:
             peers = [v for v in versions if v["skill_id"] == sid]
             if proposal.decision != "create" and not peers:
                 raise ValueError("Revisions and merges require an existing skill_id")
+            if peers and proposal.decision == "create":
+                raise ValueError("Existing skill requires revise or merge")
             if peers and peers[0]["task"] != j["task"]:
                 raise ValueError("Cannot revise another use case")
             duplicate = next(
@@ -293,6 +340,14 @@ class Service:
                 j.update(status="completed", decision="no_change", version_id=duplicate["id"])
                 self.store.put(db, "job", j["id"], j)
                 return duplicate
+            checks["no_conflict"] = not any(
+                v["skill_id"] != sid
+                and v["task"] == j["task"]
+                and v["state"] == "active"
+                and v["data"]["title"].casefold() == data["title"].casefold()
+                and set(v["data"]["applicability"]) & set(data["applicability"])
+                for v in versions
+            )
             number = len(peers) + 1
             version = dict(
                 id=f"{sid}@{number}",
@@ -382,10 +437,24 @@ class Service:
 
     def _eligible(self, db, v):
         evaluation = v["evaluation"]
+        job = self.store.get(db, "job", v["job_id"])
+        current = all(
+            self.store.get(db, "run", r["id"])["revision"] == r["revision"]
+            for r in job["evidence"]["runs"]
+        )
         return (
-            v["state"] not in {"revoked", "rejected", "changes_requested"}
+            current
+            and v["state"] not in {"revoked", "rejected", "changes_requested"}
             and v["freshness"] == "current"
             and all(v["checks"].values())
+            and not any(
+                other["skill_id"] != v["skill_id"]
+                and other["task"] == v["task"]
+                and other["state"] == "active"
+                and other["data"]["title"].casefold() == v["data"]["title"].casefold()
+                and set(other["data"]["applicability"]) & set(v["data"]["applicability"])
+                for other in self.store.all(db, "version")
+            )
             and evaluation is not None
             and evaluation["verdict"] == "pass"
         )
@@ -491,8 +560,6 @@ class Service:
                 job.pop("token", None)
             result["policy"] = self.store.get(db, "policy", "workspace")
             if reviewer:
-                import json
-
                 result["audit"] = [
                     dict(seq=r[0], at=r[1], actor=r[2], action=r[3], body=json.loads(r[4]))
                     for r in db.execute("SELECT * FROM audit ORDER BY seq DESC LIMIT 200")
@@ -505,6 +572,9 @@ class Service:
             b = self.store.get(db, "version", right)
             return "\n".join(
                 difflib.unified_diff(
-                    encoded(a["data"]).splitlines(), encoded(b["data"]).splitlines(), left, right
+                    json.dumps(a["data"], indent=2, sort_keys=True).splitlines(),
+                    json.dumps(b["data"], indent=2, sort_keys=True).splitlines(),
+                    left,
+                    right,
                 )
             )
