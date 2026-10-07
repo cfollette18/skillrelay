@@ -1,7 +1,5 @@
-import json
 import sys
 
-import httpx
 import pytest
 
 from skillrelay.instrumentation import Recorder
@@ -17,30 +15,20 @@ def test_json_and_nested_secret_redaction():
     assert "supersecret" not in clean("password=supersecret")
 
 
-def test_spool_replays_same_event_after_network_failure(tmp_path):
-    recorder = Recorder("http://localhost", "private", spool=tmp_path)
+def test_spool_replays_same_event_after_network_failure(tmp_path, monkeypatch):
+    recorder = Recorder("http://localhost/mcp", "private", spool=tmp_path)
     seen = []
 
-    def failing(request):
-        seen.append(json.loads(request.content))
-        raise httpx.ConnectError("offline")
+    def failing(payload):
+        seen.append(payload)
+        raise ConnectionError("offline")
 
-    recorder.client.close()
-    recorder.client = httpx.Client(
-        transport=httpx.MockTransport(failing), base_url="http://localhost"
-    )
-    with pytest.raises(httpx.ConnectError):
+    monkeypatch.setattr(recorder, "_call", failing)
+    with pytest.raises(ConnectionError):
         recorder.event("run", "password=supersecret", "Observed")
     pending = list(tmp_path.glob("*.json"))
     assert len(pending) == 1 and "supersecret" not in pending[0].read_text()
-
-    def success(request):
-        seen.append(json.loads(request.content))
-        return httpx.Response(200, json={})
-
-    recorder.client = httpx.Client(
-        transport=httpx.MockTransport(success), base_url="http://localhost"
-    )
+    monkeypatch.setattr(recorder, "_call", lambda payload: seen.append(payload))
     recorder.flush()
     assert seen[0] == seen[1]
     assert not list(tmp_path.glob("*.json"))

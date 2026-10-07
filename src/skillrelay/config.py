@@ -1,4 +1,4 @@
-"""A workspace has its own database and a separate reviewer credential."""
+"""A workspace owns its database and agent credentials; operators use the local CLI."""
 
 import json
 import os
@@ -18,7 +18,6 @@ def initialize(home: Path) -> dict:
         with os.fdopen(fd, "w") as f:
             json.dump(
                 {
-                    "reviewer_token": secrets.token_urlsafe(32),
                     "agent_token": secrets.token_urlsafe(32),
                 },
                 f,

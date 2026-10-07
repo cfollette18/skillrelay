@@ -36,7 +36,7 @@ Captured evidence is limited to observable inputs, outputs, errors, checks, and 
 
 Related completed runs with the same task namespace are included in learning snapshots (up to five). This lets learners compare failure and success. Existing versions are included in claims to support revision instead of repeated creation. Explicit merges cite source versions, preserve their applicability and dependency constraints, and retire their active pointers only on activation. Exact duplicate content is reused; obvious same-title/same-applicability active conflicts are blocked. Semantic overlap or contradiction requires the evaluator/reviewer; there is no embedding search or automatic semantic merge engine.
 
-Every step must cite IDs from the fixed snapshot. Required structural gates include valid references, instruction screening, and completed source runs. For a single connected agent, a human can supply the assessment in the console.
+Every step must cite IDs from the fixed snapshot. Required structural gates include valid references, instruction screening, and completed source runs. For a single connected agent, a human can supply the assessment in the operator CLI.
 The evaluator supplies separate 0–4 rubric levels with cited reasoning about observable evidence. Server computation adds outcome-provenance points. An agent's own success declaration is recorded as `self_report`, regardless of what it writes in text. Humans can verify outcomes; configured independent evaluator identities can submit outcome checks.
 
 Reviewer policy is read inside the activation transaction. Changing to human mode blocks automatic activation of jobs already in flight. Scores cannot override a failed hard gate. Evaluator error/unknown, low score, or lack of evaluator trust leaves the skill for review. Human approval still requires a passing evaluation and required checks.
@@ -49,15 +49,17 @@ Late evidence or corrected outcomes mark affected versions as needing requalific
 
 ## Authorization
 
-The HTTP interface uses separate random bearer tokens for agents and reviewers. Agents cannot access `/api/*`; reviewers cannot use their credential for MCP or ingestion. Each additional agent gets its own token mapped to a server-side identity. Evaluation cannot be performed by the same identity that proposed the skill. Only the owning agent can write a run's events; workflow completion belongs to its owner. No roles are accepted from request bodies.
+The only HTTP endpoint is `/mcp`, with a random bearer token mapped to a server-side agent identity. Additional agents get separate tokens. Evaluation cannot be performed by the same identity that proposed the skill. Only the owning agent can write a run's events; workflow completion belongs to its owner. No roles are accepted from request bodies.
 
-Stdio and the local CLI assume a trusted OS user. A process with filesystem access to the workspace can read credentials or edit SQLite; this is not an isolation boundary against that OS user. For separate identities use HTTP tokens and isolate reviewer credentials from agents. The default bind address is loopback. There is no public-hosting/OAuth/multi-tenant claim. Cross-origin requests are rejected, and the MCP SDK enforces host validation.
+Human assessments, approvals, outcome verification, dependency changes, and policy changes are local CLI operations. They are not agent-facing MCP tools and have no network review endpoint. Stdio and the operator CLI assume a trusted OS user; a process with workspace filesystem access can read credentials or edit SQLite. Use separate HTTP identities and filesystem/process isolation when agents are untrusted.
+
+The default bind address is loopback. There is no dashboard, browser login, REST API, public-hosting/OAuth, or multi-tenant claim. Cross-origin MCP requests are rejected, and the SDK validates host headers. Older config files can retain a now-unused `reviewer_token`; it grants no access in this release.
 
 ## Observability integration
 
-Built-in views cover workflows, trace events and causal IDs, learning jobs, exact skill versions, rubric scores, policy, and review/retrieval history. Retrieval and actual `skill_use` events are distinct; neither alone proves improvement.
+MCP inspection tools and operator commands expose workflows, trace events and causal IDs, learning jobs, exact skill versions, rubric scores, policy, and review/retrieval history. Retrieval and actual `skill_use` events are distinct; neither alone proves improvement.
 
-`Recorder` provides framework-independent HTTP capture and a local event spool with idempotent replay. Hermes has an optional hook adapter. Its session-end event records `unknown`: a finished agent turn is not proof of task success. Capture failures log a warning; process crashes before a run starts cannot be recovered from the event spool.
+`Recorder` provides framework-independent MCP capture and a local event spool with idempotent replay. Hermes has an optional hook adapter. Its session-end event records `unknown`: a finished agent turn is not proof of task success. Capture failures log a warning; process crashes before a run starts cannot be recovered from the event spool.
 
 `TraceExporter` provides an optional extension seam. `OpenTelemetryExporter` emits run identifiers/outcomes and tool-event identifiers through a caller-configured tracer; it exports neither prompts nor output bodies. These are export-time spans, not reconstructed timing measurements. No external backend or Langfuse integration is bundled.
 

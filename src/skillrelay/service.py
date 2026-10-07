@@ -1,4 +1,4 @@
-"""Domain rules shared by MCP, the dashboard, and instrumentation.
+"""Domain rules shared by MCP, operator commands, and instrumentation.
 
 All policy-sensitive decisions run inside the same SQLite transaction as the write.
 Trace contents are untrusted data, including instructions embedded in tool output.
@@ -506,7 +506,7 @@ class Service:
             return v
 
     def human_assessment(self, version_id, assessment: Assessment):
-        """Reviewer-only path lets a single connected agent use human evaluation."""
+        """Operator-only path lets a single connected agent use human evaluation."""
         with self.store.connect() as db:
             v = self.store.get(db, "version", version_id)
             jobs = [
@@ -700,3 +700,22 @@ class Service:
                     right,
                 )
             )
+
+    def list_runs(self, task="", outcome="", limit=20):
+        if not 1 <= limit <= 100 or (outcome and outcome not in OUTCOMES):
+            raise ValueError("Limit must be 1–100; outcome pass/fail/unknown")
+        with self.store.connect() as db:
+            return [
+                r
+                for r in self.store.all(db, "run")
+                if (not task or r["task"] == task) and (not outcome or r["outcome"] == outcome)
+            ][-limit:]
+
+    def trace(self, run_id):
+        with self.store.connect() as db:
+            run = self.store.get(db, "run", run_id)
+            return {
+                "run": run,
+                "workflow": self.store.get(db, "workflow", run["workflow_id"]),
+                "events": [e for e in self.store.all(db, "event") if e["run_id"] == run_id],
+            }

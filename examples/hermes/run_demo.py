@@ -83,9 +83,14 @@ def main():
     parser.add_argument(
         "--stage", choices=["learn", "distill", "evaluate", "reuse", "revise"], default="learn"
     )
+    parser.add_argument("--workspace", type=Path, help="Use an isolated SkillRelay workspace")
+    parser.add_argument(
+        "--profile-root", type=Path, help="Private directory for demo profiles/logs"
+    )
     args = parser.parse_args()
-    private = ROOT / ".demo"
-    home = private / "workspace"
+    private = args.profile_root or ROOT / ".demo"
+    private.mkdir(parents=True, exist_ok=True, mode=0o700)
+    home = args.workspace or private / "workspace"
     initialize(home)
     service = Service(home / "skillrelay.db")
     actor = {

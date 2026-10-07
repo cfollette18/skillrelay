@@ -1,13 +1,12 @@
-import json
 import sys
 
 import pytest
 from mcp import Client, StdioServerParameters
 from starlette.testclient import TestClient
 
+from skillrelay.http_transport import create_app
 from skillrelay.server import create_server
 from skillrelay.service import Service
-from skillrelay.web import create_app
 
 
 @pytest.mark.asyncio
@@ -34,52 +33,33 @@ async def test_stdio_subprocess(tmp_path):
         assert result.structured_content["policy"]["mode"] == "human"
 
 
-def test_http_authorization_and_ingestion(tmp_path):
+def test_http_exposes_only_authenticated_mcp(tmp_path):
     service = Service(tmp_path / "db")
-    config = {
-        "reviewer_token": "reviewer-secret",
-        "agent_token": "worker-secret",
-        "agents": {"judge": "judge-secret"},
-    }
+    config = {"agent_token": "worker-secret", "agents": {"judge": "judge-secret"}}
     with TestClient(create_app(service, config), base_url="http://127.0.0.1:8765") as client:
-        assert client.get("/health").status_code == 200
-        assert client.get("/").status_code == 200
-        assert client.get("/api/snapshot").status_code == 401
+        for path in [
+            "/",
+            "/health",
+            "/api/snapshot",
+            "/api/review",
+            "/ingest",
+            "/assets/console.js",
+        ]:
+            assert client.get(path).status_code == 404
+        assert client.post("/mcp", json={}).status_code == 401
+        headers = {
+            "Authorization": "Bearer worker-secret",
+            "Accept": "application/json, text/event-stream",
+        }
         assert (
             client.post(
-                "/api/policy",
-                headers={"Authorization": "Bearer worker-secret"},
-                json={"mode": "automatic"},
-            ).status_code
-            == 401
-        )
-        headers = {"Authorization": "Bearer reviewer-secret"}
-        assert client.get("/api/snapshot", headers=headers).status_code == 200
-        assert (
-            client.post(
-                "/api/policy",
-                headers={**headers, "Origin": "https://evil.test"},
-                json={"mode": "automatic"},
+                "/mcp", headers={**headers, "Origin": "https://evil.test"}, json={}
             ).status_code
             == 403
         )
-        assert client.post("/ingest", headers=headers, json={}).status_code == 401
-        agent = {"Authorization": "Bearer worker-secret"}
-        r = client.post(
-            "/ingest", headers=agent, json={"action": "start", "task": "test", "goal": "test"}
-        )
-        assert r.status_code == 200
-        run = r.json()
-        assert run["agent"] == "agent"
-        r = client.post(
-            "/ingest",
-            headers={"Authorization": "Bearer judge-secret"},
-            json={"action": "finish", "run_id": run["id"], "outcome": "pass"},
-        )
-        assert r.status_code == 403
-        r = client.post(
+        result = client.post(
             "/mcp",
-            headers={**agent, "Accept": "application/json, text/event-stream"},
+            headers=headers,
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -87,12 +67,12 @@ def test_http_authorization_and_ingestion(tmp_path):
                 "params": {
                     "protocolVersion": "2025-03-26",
                     "capabilities": {},
-                    "clientInfo": {"name": "integration-test", "version": "1"},
+                    "clientInfo": {"name": "test", "version": "1"},
                 },
             },
         )
-        assert r.status_code == 200, r.text
-        assert "result" in json.loads(r.text)
+        assert result.status_code == 200
+        assert "result" in result.json()
 
 
 def test_http_mcp_carries_authenticated_identity(tmp_path):
@@ -122,5 +102,60 @@ def test_http_mcp_carries_authenticated_identity(tmp_path):
             client.post(
                 "/api/assess", headers={"Authorization": "Bearer judge"}, json={}
             ).status_code
-            == 401
+            == 404
         )
+
+
+def test_recorder_uses_real_mcp_transport(tmp_path):
+    import socket
+    import subprocess
+    import time
+
+    import httpx
+
+    from skillrelay.instrumentation import Recorder
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    from skillrelay.config import initialize
+
+    config = initialize(tmp_path)
+    with (tmp_path / "server.log").open("w") as log:
+        process = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "skillrelay.cli",
+                "--home",
+                str(tmp_path),
+                "serve",
+                "--transport",
+                "http",
+                "--port",
+                str(port),
+            ],
+            stdout=log,
+            stderr=log,
+        )
+        recorder = Recorder(
+            f"http://127.0.0.1:{port}/mcp", config["agent_token"], tmp_path / "spool"
+        )
+        try:
+            for _ in range(100):
+                try:
+                    if httpx.post(f"http://127.0.0.1:{port}/mcp").status_code == 401:
+                        break
+                except httpx.TransportError:
+                    pass
+                time.sleep(0.05)
+            run = recorder.start("transport-test", "Record through MCP")
+            event = recorder.event(run["id"], "Observe actual output", "PASS", success=True)
+            result = recorder.finish(run["id"], "pass", workflow_outcome="pass")
+            assert result["job"]
+            service = Service(tmp_path / "skillrelay.db")
+            assert service.trace(run["id"])["events"][0]["id"] == event["id"]
+        finally:
+            recorder.close()
+            process.terminate()
+            process.wait(timeout=10)
