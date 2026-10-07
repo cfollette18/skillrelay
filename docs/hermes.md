@@ -1,8 +1,8 @@
-# Hermes integration and real demo
+# Hermes + SkillRelay MCP
 
-Hermes stays the agent runtime and supplies the model. SkillRelay stays the MCP learning/distribution service. The integration follows [Hermes MCP configuration](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp/).
+Hermes supplies the agent runtime and model. SkillRelay provides tools for evidence capture, learning, evaluations, and skill distribution. There is no browser application.
 
-Add to your chosen Hermes profile's `config.yaml`:
+Add to the chosen Hermes profile's `config.yaml`:
 
 ```yaml
 mcp_servers:
@@ -18,70 +18,60 @@ mcp_servers:
       - hermes-worker
 ```
 
-Use a separate profile with `--agent hermes-evaluator` for evaluation. Both profiles should point to the same SkillRelay workspace. If you customize the workspace, insert `--home /path/to/workspace` before `serve`.
+Use another profile with `--agent hermes-evaluator` for independent evaluations. Both point to the same workspace; insert `--home /path/to/workspace` before `serve` to customize it. Stdio identity assumes a trusted local process. For separately authenticated identities use Streamable HTTP at `/mcp` with provisioned agent tokens.
 
-For stronger identity separation, use the HTTP MCP URL and distinct provisioned agent tokens instead of local stdio identities. Never add the reviewer token to a Hermes profile.
+## Run the real demo
 
-## Reproduce the video workflow
-
-The repository includes a synthetic UTF-8 BOM/semicolon invoice fixture, a deliberately naive parser, a correct parser for that exact format, and a runner that invokes **real Hermes**. The source agent run is live; the fixture and failure are intentionally controlled demo inputs. This is not a held-out behavioral benchmark.
+The synthetic fixture has a UTF-8 BOM and semicolon delimiter. The naive parser fails; the parser for the documented format succeeds. The runner invokes the actual Hermes installation and configured model in isolated private profiles under `.demo/`. Your regular profile is not modified.
 
 ```bash
 uv sync --group demo
-uv run --group demo playwright install chromium
 uv run --group demo python examples/hermes/run_demo.py --stage learn
 uv run --group demo python examples/hermes/run_demo.py --stage evaluate
-uv run skillrelay --home .demo/workspace serve --transport http
-uv run skillrelay --home .demo/workspace credential reviewer
-```
-
-The runner uses your existing Hermes installation and model configuration, copied into isolated private profiles under `.demo/`. Your regular profile is not changed. Model calls use the credentials already configured in Hermes. Override `--hermes` and `--base-profile` for a different installation. Private configs and logs are gitignored; never publish `.demo/`.
-
-In the console inspect the actual failure/success events, proposal citations, checks, and separate evaluator assessment. Approve the exact skill version. Then start a fresh session:
-
-```bash
+uv run skillrelay --home .demo/workspace skills
+uv run skillrelay --home .demo/workspace inspect '<skill-id>@1'
+uv run skillrelay --home .demo/workspace review '<skill-id>@1' '<hash>' approve
 uv run --group demo python examples/hermes/run_demo.py --stage reuse
 ```
 
-Verify that `skill_use` records the exact version and observed output. Use the console's version diff and rollback controls for later revisions. `--stage distill` can resume learning if the initial run completed but its proposal submission failed.
+Inspect actual use with `skillrelay --home .demo/workspace traces`. The fresh session discovers the active skill, retrieves the exact version, executes the parser, and reports `skill_use` through MCP. Completion remains self-report unless independently checked.
 
-Some Hermes/model combinations wrap nested tool arguments in XML-like objects. The `propose_skill_json` and `evaluate_skill_json` tools accept strict JSON strings for these clients; they enforce exactly the same schema and activation rules as typed submissions.
-
-## Automatic learning driver
-
-For ongoing work use `skillrelay work` with a configured Hermes command and profile. It asks Hermes to claim and process one job per invocation; use a different profile/identity for evaluator work. Maximum invocations, subprocess timeout, leases, and retry limits bound execution. The server does not own or select a model.
-
-## Optional native tool capture
-
-Copy `integrations/hermes/skillrelay/` into the chosen Hermes profile's `plugins/` directory and make the `skillrelay` Python package importable in Hermes' environment. Check dependency compatibility before installing it into an existing environment. Configure `SKILLRELAY_URL`, `SKILLRELAY_AGENT_TOKEN`, and optional `SKILLRELAY_TASK` in that profile's private environment.
-
-The plugin records observable `post_tool_call` events and closes runs with `unknown` on session end. It skips SkillRelay's own tools to avoid recursion and lease-token capture. It does not declare success or automatically approve a skill. Use explicit reporting for task outcomes and multi-agent causal links; hooks cannot infer those reliably.
-
-## Published recording
-
-[Video](media/skillrelay-demo.mp4) and [redacted evidence](media/demo-evidence.json) capture
-real Hermes learning, independent evaluation, and fresh-session reuse. Reviewer actions in the
-browser recording are scripted demonstrations, visibly labeled. The original configured model's
-nested-argument encoding initially failed; the JSON submission tools resolved it. The first
-successful proposal used a retry of the original job. No unsuccessful attempt was relabeled as a
-successful model call.
-
-The second version narrows the original skill's applicability. It was independently evaluated
-under automatic mode with a threshold of 90, received 60, and stayed pending review. The recording
-then activates it through the reviewer interface and rolls back to version 1. Both immutable
-versions and the actual applied version ID are present in the published evidence.
-
-To create those later chapters after reuse:
+For a second immutable version:
 
 ```bash
 uv run --group demo python examples/hermes/run_demo.py --stage revise
-uv run skillrelay --home .demo/workspace policy --mode automatic --threshold 90 \
-  --trust-evaluator hermes-evaluator
 uv run --group demo python examples/hermes/run_demo.py --stage evaluate
-uv run --group demo python examples/hermes/record_console.py --chapter versions
+uv run skillrelay --home .demo/workspace diff '<skill-id>@1' '<skill-id>@2'
 ```
 
-`record_console.py` uses Playwright against the already running demo server. `--chapter review`
-records the first review/activation; `--chapter reuse` records the resulting trace/audit views.
-Only use these scripted reviewer actions in the synthetic demo workspace. Export publishable
-trace evidence with `uv run python examples/hermes/export_demo.py`.
+`--stage distill` resumes a completed run's queued learning job. `--workspace` and `--profile-root` let recordings use separate private copies. Override `--hermes` or `--base-profile` for a different installation.
+
+Some Hermes/model combinations wrap nested arguments as XML-like objects. Use the strict JSON-string alternatives `propose_skill_json` and `evaluate_skill_json`; they enforce the same schemas and policy as typed submissions.
+
+## Terminal recording
+
+The terminal demo uses existing real Hermes evidence, makes actual MCP and CLI calls, and starts another real Hermes reuse session. It performs scripted operator approvals and rollback in an isolated database copy. Only idle waiting is compressed during playback; no model reasoning or credentials are published.
+
+After creating/evaluating the two versions above, with version 1 active:
+
+```bash
+asciinema rec --cols 106 --rows 32 -i 2 \
+  -c '.venv/bin/python examples/hermes/terminal_demo.py' \
+  docs/media/skillrelay-mcp-demo.cast
+agg --idle-time-limit 5 --font-size 18 --theme github-dark \
+  docs/media/skillrelay-mcp-demo.cast /tmp/skillrelay-demo.gif
+ffmpeg -i /tmp/skillrelay-demo.gif -c:v libx264 -pix_fmt yuv420p \
+  -movflags +faststart docs/media/skillrelay-mcp-demo.mp4
+```
+
+[MP4 video](https://github.com/cfollette18/skillrelay/releases/download/v0.2.0/skillrelay-mcp-demo.mp4) · [Replayable terminal recording](media/skillrelay-mcp-demo.cast) · [Evidence](media/demo-evidence.json)
+
+This is a controlled functional demo on synthetic data. It does not claim held-out behavioral improvements.
+
+## Optional native capture and continuous learning
+
+Copy `integrations/hermes/skillrelay/` into your chosen Hermes profile's `plugins/` directory and make the Python package importable in that environment. Configure `SKILLRELAY_URL=http://127.0.0.1:8765/mcp`, `SKILLRELAY_AGENT_TOKEN`, and optional `SKILLRELAY_TASK` privately.
+
+The hook records observable `post_tool_call` events through the official MCP client and closes runs as `unknown`. It skips SkillRelay's own tools to avoid recursion and lease-token capture. Explicit reporting is still needed for verified outcomes and multi-agent causal links.
+
+For automatic processing, use `skillrelay work` with a configured Hermes command. Run the evaluator under a separate identity. The driver bounds invocations and wall time; SkillRelay enforces durable leases and retry budgets. Human approval and policy changes remain local operator commands, outside the agent tool catalog.

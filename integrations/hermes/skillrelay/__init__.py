@@ -25,7 +25,7 @@ def recorder():
         if not token:
             return None
         _recorder = Recorder(
-            os.environ.get("SKILLRELAY_URL", "http://127.0.0.1:8765"),
+            os.environ.get("SKILLRELAY_URL", "http://127.0.0.1:8765/mcp"),
             token,
             Path(os.environ.get("HERMES_HOME", "~/.hermes")).expanduser() / "skillrelay-spool",
         )

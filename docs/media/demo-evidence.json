@@ -1,11 +1,8 @@
 {
-  "captured_at": "2026-10-07T18:19:19.340366+00:00",
-  "method": "Live Hermes sessions via MCP; synthetic fixture; scripted reviewer actions",
+  "captured_at": "2026-10-07T18:49:18.241946+00:00",
+  "method": "Real MCP/CLI terminal capture with a fresh Hermes reuse session; earlier Hermes-generated skill versions retained; scripted operator actions",
+  "hermes_elapsed_seconds": 113.28,
   "not_a_behavioral_benchmark": true,
-  "redactions": [
-    "Absolute repository path replaced with $REPO",
-    "Job lease tokens omitted"
-  ],
   "runs": [
     {
       "agent": "hermes-worker",
@@ -34,26 +31,20 @@
       "status": "completed",
       "task": "invoice-import",
       "workflow_id": "072b69483cbb4cd79cf42ac824529e23"
-    }
-  ],
-  "workflows": [
-    {
-      "created": 1791396249.1688826,
-      "id": "2cfc2065fa48448e9a2561d4e8ec70c6",
-      "outcome": "pass",
-      "owner": "hermes-worker",
-      "pattern": "single",
-      "status": "completed",
-      "task": "invoice-import"
     },
     {
-      "created": 1791396738.5660667,
-      "id": "072b69483cbb4cd79cf42ac824529e23",
+      "agent": "hermes-fresh",
+      "created": 1791398857.872886,
+      "goal": "Import semicolon-delimited BOM-prefixed invoice file using robust_import.py per skill guidance, then finish run with outcome=pass.",
+      "id": "ac498e6349474c3f9e6822429bd4afd4",
       "outcome": "pass",
-      "owner": "hermes-fresh",
-      "pattern": "single",
+      "outcome_source": "self_report",
+      "parent": null,
+      "revision": 2,
+      "role": "worker",
       "status": "completed",
-      "task": "invoice-import"
+      "task": "invoice-import",
+      "workflow_id": "7f99fa7334f945fb8326b754736231a3"
     }
   ],
   "events": [
@@ -98,6 +89,23 @@
       "success": true,
       "tool": "terminal",
       "workflow_id": "072b69483cbb4cd79cf42ac824529e23"
+    },
+    {
+      "action": "Executed robust_import.py per skill 5c9ac60ad376433081b39c1ea5928f67@1 guidance (encoding='utf-8-sig', csv delimiter=';', access total_usd from header, parse with Decimal).",
+      "causes": [],
+      "duration_ms": null,
+      "event_id": "evt-skill-use-invoice-import",
+      "id": "ac498e6349474c3f9e6822429bd4afd4:evt-skill-use-invoice-import",
+      "kind": "skill_use",
+      "recipient": "",
+      "recorded_at": 1791398919.626166,
+      "result": "PASS: imported 3 invoices; total USD 125.50",
+      "run_id": "ac498e6349474c3f9e6822429bd4afd4",
+      "skill_state_at_report": "active",
+      "skill_version": "5c9ac60ad376433081b39c1ea5928f67@1",
+      "success": true,
+      "tool": "terminal",
+      "workflow_id": "7f99fa7334f945fb8326b754736231a3"
     }
   ],
   "versions": [
@@ -181,6 +189,7 @@
       "job_id": "fdf9576d84ef43778ccba4083bb86d14",
       "number": 1,
       "proposer": "hermes-worker",
+      "review_hold": false,
       "skill_id": "5c9ac60ad376433081b39c1ea5928f67",
       "state": "active",
       "task": "invoice-import",
@@ -271,6 +280,7 @@
       "job_id": "6d656fc8d0ad42ef83cb6392d13d79e0",
       "number": 2,
       "proposer": "hermes-worker",
+      "review_hold": false,
       "skill_id": "5c9ac60ad376433081b39c1ea5928f67",
       "state": "superseded",
       "task": "invoice-import",
@@ -278,6 +288,150 @@
     }
   ],
   "audit": [
+    {
+      "seq": 25,
+      "at": 1791398947.7231667,
+      "actor": "local-human",
+      "action": "review",
+      "body": {
+        "action": "rollback",
+        "hash": "9740dbde82786ea5098db09138932bf7cc4f4203f35c0bac8820492a56309ec5",
+        "reason": "",
+        "version": "5c9ac60ad376433081b39c1ea5928f67@1"
+      }
+    },
+    {
+      "seq": 24,
+      "at": 1791398947.7225995,
+      "actor": "local-human",
+      "action": "rollback",
+      "body": {
+        "hash": "9740dbde82786ea5098db09138932bf7cc4f4203f35c0bac8820492a56309ec5",
+        "policy": 3,
+        "version": "5c9ac60ad376433081b39c1ea5928f67@1"
+      }
+    },
+    {
+      "seq": 23,
+      "at": 1791398944.9578416,
+      "actor": "local-human",
+      "action": "review",
+      "body": {
+        "action": "approve",
+        "hash": "bb5eddd51f8d316c1b63ec0150a49f6779c2bb6d91b820e825305ef3c241ba47",
+        "reason": "",
+        "version": "5c9ac60ad376433081b39c1ea5928f67@2"
+      }
+    },
+    {
+      "seq": 22,
+      "at": 1791398944.9574268,
+      "actor": "local-human",
+      "action": "approve",
+      "body": {
+        "hash": "bb5eddd51f8d316c1b63ec0150a49f6779c2bb6d91b820e825305ef3c241ba47",
+        "policy": 3,
+        "version": "5c9ac60ad376433081b39c1ea5928f67@2"
+      }
+    },
+    {
+      "seq": 21,
+      "at": 1791398857.8328075,
+      "actor": "hermes-fresh",
+      "action": "retrieved",
+      "body": {
+        "version": "5c9ac60ad376433081b39c1ea5928f67@1"
+      }
+    },
+    {
+      "seq": 20,
+      "at": 1791398854.5311332,
+      "actor": "hermes-fresh",
+      "action": "discovery",
+      "body": {
+        "query": "",
+        "task": "invoice-import",
+        "versions": [
+          "5c9ac60ad376433081b39c1ea5928f67@1"
+        ]
+      }
+    },
+    {
+      "seq": 19,
+      "at": 1791398817.0965314,
+      "actor": "demo-inspector",
+      "action": "discovery",
+      "body": {
+        "query": "",
+        "task": "invoice-import",
+        "versions": [
+          "5c9ac60ad376433081b39c1ea5928f67@1"
+        ]
+      }
+    },
+    {
+      "seq": 18,
+      "at": 1791398816.548612,
+      "actor": "local-human",
+      "action": "review",
+      "body": {
+        "action": "approve",
+        "hash": "9740dbde82786ea5098db09138932bf7cc4f4203f35c0bac8820492a56309ec5",
+        "reason": "Scripted operator review of synthetic demo evidence",
+        "version": "5c9ac60ad376433081b39c1ea5928f67@1"
+      }
+    },
+    {
+      "seq": 17,
+      "at": 1791398816.5475779,
+      "actor": "local-human",
+      "action": "approve",
+      "body": {
+        "hash": "9740dbde82786ea5098db09138932bf7cc4f4203f35c0bac8820492a56309ec5",
+        "policy": 3,
+        "version": "5c9ac60ad376433081b39c1ea5928f67@1"
+      }
+    },
+    {
+      "seq": 16,
+      "at": 1791398812.0709372,
+      "actor": "demo-inspector",
+      "action": "discovery",
+      "body": {
+        "query": "",
+        "task": "invoice-import",
+        "versions": []
+      }
+    },
+    {
+      "seq": 15,
+      "at": 1791398799.9020956,
+      "actor": "local-human",
+      "action": "review",
+      "body": {
+        "action": "defer",
+        "hash": "9740dbde82786ea5098db09138932bf7cc4f4203f35c0bac8820492a56309ec5",
+        "reason": "Replay review in isolated demo",
+        "version": "5c9ac60ad376433081b39c1ea5928f67@1"
+      }
+    },
+    {
+      "seq": 14,
+      "at": 1791398799.6550899,
+      "actor": "local-human",
+      "action": "policy_changed",
+      "body": {
+        "auto_distill": true,
+        "lease_seconds": 120,
+        "max_attempts": 3,
+        "max_events_per_run": 500,
+        "max_jobs_per_run": 6,
+        "mode": "human",
+        "revision": 3,
+        "threshold": 90,
+        "trusted_evaluators": []
+      }
+    },
     {
       "seq": 13,
       "at": 1791397099.318872,
