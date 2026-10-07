@@ -41,6 +41,6 @@ The client spool is written before event delivery and replayed with the same eve
 
 ## Reviewer API
 
-The console uses a separate bearer credential and `/api/snapshot`, `/api/review`, `/api/policy`, `/api/outcome`, `/api/dependency`, and `/api/diff`. Mutations require POST. Review payloads contain `version_id`, `expected_hash`, `action`, and optional `reason`. Dependency payloads contain `name`, `version`, and `confirmed`.
+The console uses a separate bearer credential and `/api/snapshot`, `/api/review`, `/api/assess`, `/api/policy`, `/api/outcome`, `/api/dependency`, and `/api/diff`. Mutations require POST. Review payloads contain `version_id`, `expected_hash`, `action`, and optional `reason`. Dependency payloads contain `name`, `version`, and `confirmed`.
 
 Reviewer APIs are intentionally absent from the MCP tool catalog. Programmatic access does not mean the learning agent should receive reviewer credentials. The local CLI is an operator interface.

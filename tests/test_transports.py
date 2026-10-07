@@ -93,3 +93,34 @@ def test_http_authorization_and_ingestion(tmp_path):
         )
         assert r.status_code == 200, r.text
         assert "result" in json.loads(r.text)
+
+
+def test_http_mcp_carries_authenticated_identity(tmp_path):
+    service = Service(tmp_path / "db")
+    config = {"reviewer_token": "reviewer", "agent_token": "worker", "agents": {"judge": "judge"}}
+    with TestClient(create_app(service, config), base_url="http://127.0.0.1:8765") as client:
+        response = client.post(
+            "/mcp",
+            headers={
+                "Authorization": "Bearer judge",
+                "Accept": "application/json, text/event-stream",
+                "MCP-Protocol-Version": "2025-03-26",
+            },
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "start_run",
+                    "arguments": {"task": "http", "goal": "Check identity"},
+                },
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["result"]["structuredContent"]["agent"] == "judge"
+        assert (
+            client.post(
+                "/api/assess", headers={"Authorization": "Bearer judge"}, json={}
+            ).status_code
+            == 401
+        )

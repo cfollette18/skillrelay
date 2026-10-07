@@ -9,7 +9,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-from .models import Event
+from .models import Assessment, Event
 from .server import create_server, principal
 
 
@@ -79,6 +79,10 @@ def create_app(service, config):
                 result = service.snapshot(reviewer=True)
             elif op == "review" and request.method == "POST":
                 result = service.review("human", **data)
+            elif op == "assess" and request.method == "POST":
+                result = service.human_assessment(
+                    data["version_id"], Assessment.model_validate(data["assessment"])
+                )
             elif op == "policy" and request.method == "POST":
                 result = service.set_policy("human", **data)
             elif op == "outcome" and request.method == "POST":

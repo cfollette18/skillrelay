@@ -81,7 +81,9 @@ class Service:
             raise ValueError("A task, bounded goal and supported pattern are required")
         with self.store.connect() as db:
             if workflow_id:
-                self.store.get(db, "workflow", workflow_id)
+                existing_workflow = self.store.get(db, "workflow", workflow_id)
+                if existing_workflow["status"] != "running":
+                    raise ValueError("Cannot join a completed workflow")
             else:
                 workflow_id = identity()
                 self.store.put(
@@ -444,7 +446,7 @@ class Service:
             )
             return version
 
-    def evaluate(self, actor, job_id, token, assessment: Assessment):
+    def evaluate(self, actor, job_id, token, assessment: Assessment, *, human_review=False):
         with self.store.connect() as db:
             j = self._leased(db, actor, job_id, token)
             if j["kind"] != "evaluate":
@@ -454,7 +456,7 @@ class Service:
             if not set(assessment.evidence) <= refs:
                 raise ValueError("Evaluator cited evidence outside this job")
             p = self.store.get(db, "policy", "workspace")
-            trusted = actor in p["trusted_evaluators"]
+            trusted = human_review or actor in p["trusted_evaluators"]
             # A self-reported successful run contributes zero provenance points.
             provenance = (
                 4
@@ -481,14 +483,61 @@ class Service:
                 p["mode"] == "automatic"
                 and trusted
                 and confidence >= p["threshold"]
+                and not v.get("review_hold", False)
+                and not any(
+                    other["skill_id"] == v["skill_id"]
+                    and other["state"] == "active"
+                    and other["number"] > v["number"]
+                    for other in self.store.all(db, "version")
+                )
                 and self._eligible(db, v)
             ):
                 self._activate(db, v, "system", "automatic")
             self.store.put(db, "version", v["id"], v)
             j.update(status="completed", token=None)
             self.store.put(db, "job", j["id"], j)
-            self.audit(db, actor, "evaluated", {"version": v["id"], "confidence": confidence})
+            self.audit(
+                db,
+                actor,
+                "evaluated",
+                {"version": v["id"], "confidence": confidence, "assessment": v["evaluation"]},
+            )
             return v
+
+    def human_assessment(self, version_id, assessment: Assessment):
+        """Reviewer-only path lets a single connected agent use human evaluation."""
+        with self.store.connect() as db:
+            v = self.store.get(db, "version", version_id)
+            jobs = [
+                j
+                for j in self.store.all(db, "job")
+                if j["kind"] == "evaluate" and j["version_id"] == version_id
+            ]
+            if any(j["status"] == "running" and j["lease_until"] > time.time() for j in jobs):
+                raise ValueError("An evaluator holds a live lease; retry after it completes")
+            source = self.store.get(db, "job", v["job_id"])
+            job = dict(
+                id=identity(),
+                kind="evaluate",
+                run_id=source["run_id"],
+                task=v["task"],
+                evidence=source["evidence"],
+                version_id=version_id,
+                status="running",
+                worker="human-reviewer",
+                token=identity(),
+                lease_until=time.time() + 120,
+                attempts=1,
+                created=time.time(),
+            )
+            for other in jobs:
+                if other["status"] in {"queued", "running"}:
+                    other["status"] = "superseded"
+                    self.store.put(db, "job", other["id"], other)
+            self.store.put(db, "job", job["id"], job)
+        return self.evaluate(
+            "human-reviewer", job["id"], job["token"], assessment, human_review=True
+        )
 
     def _eligible(self, db, v):
         evaluation = v["evaluation"]
@@ -531,6 +580,7 @@ class Service:
             if source["id"] != v["id"] and source["state"] == "active":
                 source["state"] = "merged"
                 self.store.put(db, "version", key, source)
+        v["review_hold"] = False
         v["state"] = "active"
         self.audit(
             db,
@@ -553,6 +603,7 @@ class Service:
             if action in {"approve", "rollback"}:
                 self._activate(db, v, actor, action)
             else:
+                v["review_hold"] = True
                 v["state"] = {
                     "reject": "rejected",
                     "request_changes": "changes_requested",

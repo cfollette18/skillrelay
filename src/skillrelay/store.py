@@ -15,6 +15,9 @@ class Store:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.path = path
         with self.connect() as db:
+            current = db.execute("PRAGMA user_version").fetchone()[0]
+            if current not in {0, 1}:
+                raise ValueError(f"Unsupported database schema version: {current}")
             db.executescript("""
             PRAGMA journal_mode=WAL;
             CREATE TABLE IF NOT EXISTS records (

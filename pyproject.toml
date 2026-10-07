@@ -7,6 +7,9 @@ name = "skillrelay-mcp"
 version = "0.1.0"
 description = "Local-first MCP skill distribution with automatic learning from single-agent and multi-agent runs."
 readme = "README.md"
+license = "MIT"
+authors = [{name = "cfollette18"}]
+
 requires-python = ">=3.11"
 dependencies = [
     "mcp==2.3.0",
@@ -15,6 +18,9 @@ dependencies = [
     "starlette==1.7.0",
     "uvicorn==0.54.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/cfollette18/skillrelay"
 
 [project.scripts]
 skillrelay = "skillrelay.cli:main"

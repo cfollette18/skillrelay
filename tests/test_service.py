@@ -242,3 +242,81 @@ def test_agent_cannot_keep_human_provenance_after_changing_outcome(service):
     service.verify_outcome("human", run["id"], "pass")
     service.finish("worker", run["id"], "fail")
     assert service.snapshot()["run"][0]["outcome_source"] == "self_report"
+
+
+def test_human_deferral_blocks_inflight_auto_activation(service):
+    service.set_policy("human", "automatic", trusted_evaluators=["evaluator"])
+    v = propose(service, verified=True)
+    service.review("human", v["id"], v["hash"], "defer")
+    assert evaluate(service)["state"] == "pending_review"
+
+
+def test_completed_workflow_rejects_new_members(service):
+    run = service.start("manager", "case", "Finish")
+    service.finish("manager", run["id"], "pass", "pass")
+    with pytest.raises(ValueError, match="completed workflow"):
+        service.start("worker", "case", "Late", workflow_id=run["workflow_id"])
+
+
+def test_single_agent_can_use_human_rubric_then_approval(service):
+    v = propose(service)
+    event = service.snapshot()["event"][0]
+    reviewed = service.human_assessment(
+        v["id"],
+        Assessment(
+            support=3,
+            applicability=3,
+            completeness=3,
+            contradictions=4,
+            verdict="pass",
+            rationale="Reviewed observable evidence",
+            evaluator_version="human-rubric-v1",
+            evidence=[event["id"]],
+        ),
+    )
+    assert reviewed["evaluation"]["trusted"]
+    assert reviewed["state"] == "pending_review"
+    service.review("human", v["id"], v["hash"], "approve")
+    assert service.discover("worker", "repair")
+    assert service.claim("evaluator", "evaluate")["job"] is None
+
+
+def test_merge_keeps_source_provenance_and_retires_active_source(service):
+    a = propose(service, title="Status inspection")
+    a = evaluate(service)
+    service.review("human", a["id"], a["hash"], "approve")
+    b = propose(service, title="Header inspection")
+    b = evaluate(service)
+    service.review("human", b["id"], b["hash"], "approve")
+    run = service.start("worker", "repair", "Observe combined process")
+    e = service.event(
+        "worker", run["id"], Event(event_id="both", action="Check status and headers")
+    )
+    service.finish("worker", run["id"], "pass")
+    j = service.claim("learner")
+    merged = Proposal(
+        **{
+            **a["data"],
+            "decision": "merge",
+            "skill_id": a["skill_id"],
+            "merged_from": [b["id"]],
+            "steps": [{"instruction": "Check status and headers", "evidence": [e["id"]]}],
+        }
+    )
+    v = service.propose("learner", j["id"], j["token"], merged)
+    v = evaluate(service)
+    service.review("human", v["id"], v["hash"], "approve")
+    active = service.discover("worker", "repair")
+    assert [x["id"] for x in active] == [v["id"]]
+    assert active[0]["data"]["merged_from"] == [b["id"]]
+    assert next(x for x in service.snapshot()["version"] if x["id"] == b["id"])["state"] == "merged"
+
+
+def test_simultaneous_claims_cannot_lease_one_job_twice(service):
+    from concurrent.futures import ThreadPoolExecutor
+
+    run = service.start("worker", "case", "Observe")
+    service.finish("worker", run["id"], "unknown")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(service.claim, ["learner-a", "learner-b"]))
+    assert sum("token" in result for result in results) == 1

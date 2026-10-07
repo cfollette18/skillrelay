@@ -79,3 +79,13 @@ def test_lease_renewal_ownership_and_ceiling(tmp_path):
         service.renew("stranger", job["id"], job["token"])
     result = service.renew("learner", job["id"], job["token"])
     assert result["lease_until"] <= job["claimed_at"] + 600
+
+
+def test_future_database_version_is_not_silently_downgraded(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "future.db"
+    with sqlite3.connect(path) as db:
+        db.execute("PRAGMA user_version=99")
+    with pytest.raises(ValueError, match="schema version"):
+        Service(path)

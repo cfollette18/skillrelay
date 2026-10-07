@@ -48,7 +48,7 @@ Or connect to `http://127.0.0.1:8765/mcp` with `Authorization: Bearer <agent tok
 1. **Observe:** start a run; record tool actions, results, messages, handoffs, and causal edges. Mark task and workflow outcomes separately as pass, fail, or unknown.
 2. **Queue:** checkpoints and completed runs automatically create durable learning jobs with fixed evidence snapshots, including recent related runs.
 3. **Distill:** a connected agent claims a job, inspects existing skills, and chooses create, revise, merge, investigate, or no change. Every proposed step cites trace evidence.
-4. **Evaluate:** a different agent checks support, applicability, completeness, and contradictions. The server validates structure and citations and computes an evidence-confidence score.
+4. **Evaluate:** a different agent or the human reviewer checks support, applicability, completeness, and contradictions. The server validates structure and citations and computes an evidence-confidence score.
 5. **Activate:** human review is the default. Optional automatic mode requires passing checks, a trusted evaluator, and the configured confidence threshold. Otherwise the proposal waits for a human.
 6. **Reuse:** agents discover compatible active skills, retrieve an exact version, and report actual application separately from retrieval. Failures or changed evidence/dependencies withdraw qualification.
 
@@ -100,6 +100,8 @@ Your client can call the learning tools after each task. For continuous learning
 uv run skillrelay work --kind distill --max-invocations 20 \
   --command-json '["hermes", "chat", "--max-turns", "16", "-q", "{prompt}"]'
 ```
+
+For a single connected agent, the reviewer can complete the rubric in the console before approving.
 
 Run an evaluator driver with `--kind evaluate` under a **different authenticated agent identity**. The driver uses no shell interpolation and caps each invocation's wall time. Model-token and dollar budgets remain the responsibility of your agent runtime. Local stdio identities are trusted configuration; use separately provisioned HTTP tokens when identity isolation matters.
 
