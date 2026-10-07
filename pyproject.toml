@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "skillrelay-mcp"
+version = "0.1.0"
+description = "Local-first MCP skill distribution with automatic learning from single-agent and multi-agent runs."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["mcp==2.3.0", "httpx==0.28.1", "pydantic==2.13.5"]
+
+[project.scripts]
+skillrelay = "skillrelay.cli:main"
+
+[dependency-groups]
+dev = ["pytest==9.1.1", "pytest-asyncio==1.4.0", "ruff==0.16.10"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/skillrelay"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
