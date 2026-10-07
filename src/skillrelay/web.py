@@ -8,6 +8,7 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
+from starlette.staticfiles import StaticFiles
 
 from .models import Assessment, Event
 from .server import create_server, principal
@@ -18,7 +19,11 @@ class Authentication:
         self.app, self.config = app, config
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or scope["path"] in {"/", "/health"}:
+        if (
+            scope["type"] != "http"
+            or scope["path"] in {"/", "/health"}
+            or scope["path"].startswith("/assets/")
+        ):
             return await self.app(scope, receive, send)
         request = Request(scope)
         supplied = request.headers.get("authorization", "").removeprefix("Bearer ")
@@ -59,8 +64,10 @@ def create_app(service, config):
             Path(__file__).with_name("dashboard.html").read_text(),
             headers={
                 "Content-Security-Policy": (
-                    "default-src 'self'; script-src 'unsafe-inline'; "
-                    "style-src 'unsafe-inline'; connect-src 'self'; "
+                    "default-src 'self'; script-src 'self'; "
+                    "style-src 'self' 'unsafe-inline' https://api.fontshare.com; "
+                    "font-src 'self' https://cdn.fontshare.com https://api.fontshare.com; "
+                    "connect-src 'self'; "
                     "frame-ancestors 'none'"
                 ),
                 "X-Content-Type-Options": "nosniff",
@@ -124,6 +131,7 @@ def create_app(service, config):
             Route("/health", health),
             Route("/api/{op}", api, methods=["GET", "POST"]),
             Route("/ingest", ingest, methods=["POST"]),
+            Mount("/assets", StaticFiles(directory=Path(__file__).with_name("assets"))),
             Mount("/", transport),
         ],
         lifespan=lifespan,

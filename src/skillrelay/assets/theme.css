@@ -1,0 +1,24 @@
+/* Namakan's oat/navy/lava design direction; SkillRelay's own components. */
+:root {
+  color-scheme: light;
+  --canvas: #ffffff;
+  --surface: #ffffff;
+  --surface-subtle: #f9f7f4;
+  --surface-hover: #f1efeb;
+  --selected: #eeede9;
+  --text: #1b3139;
+  --text-secondary: #33494f;
+  --text-muted: #58686b;
+  --border: #e3e3dd;
+  --border-strong: #788580;
+  --accent: #ff3621;
+  --on-accent: #0b2026;
+  --success: #236348;
+  --success-surface: #eaf3ec;
+  --warning: #79520d;
+  --warning-surface: #fff2d5;
+  --danger: #9f2b25;
+  --danger-surface: #fbede9;
+  --overlay: #0b202657;
+  --shadow: #0b202614;
+}
