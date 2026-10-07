@@ -6,6 +6,32 @@ from skillrelay.models import Event, Proposal
 from skillrelay.service import Service
 
 
+def test_install_skill_without_workspace_and_preserve_existing_files(tmp_path):
+    home = tmp_path / "unused-workspace"
+    destination = tmp_path / "client-skills" / "skillrelay-workflow"
+    command = [
+        sys.executable,
+        "-m",
+        "skillrelay.cli",
+        "--home",
+        str(home),
+        "install-skill",
+        str(destination),
+    ]
+    subprocess.run(command, text=True, capture_output=True, check=True)
+    assert (destination / "SKILL.md").is_file()
+    assert (destination / "references" / "learning.md").is_file()
+    assert not home.exists()
+
+    skill = destination / "SKILL.md"
+    skill.write_text("Operator-customized instructions")
+    second = subprocess.run(command, text=True, capture_output=True)
+    assert second.returncode != 0
+    assert "Could not install skill" in second.stderr
+    assert skill.read_text() == "Operator-customized instructions"
+    assert not home.exists()
+
+
 def test_operator_can_review_without_network_api(tmp_path):
     service = Service(tmp_path / "skillrelay.db")
     run = service.start("agent", "case", "Observe a result")

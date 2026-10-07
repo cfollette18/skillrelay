@@ -39,6 +39,22 @@ uv run skillrelay credential agent
 
 Connect your client to `http://127.0.0.1:8765/mcp` with `Authorization: Bearer <agent token>`. This is a protocol endpoint, not a browser page. Provision separate identities with `skillrelay add-agent evaluator`; restart the HTTP server after adding credentials.
 
+## Bundled workflow skill
+
+Install [skillrelay-workflow](src/skillrelay/bundled/skillrelay-workflow/SKILL.md) into a new directory in your agent client's skills location:
+
+```bash
+uv run skillrelay install-skill /path/to/client/skills/skillrelay-workflow
+```
+
+The destination is the skill folder itself. The command copies the instructions and learning reference bundled with the Python package; it also works with a wheel installation using `skillrelay install-skill ...`. Existing destinations are refused to preserve local edits. To update, install to a new directory and compare before replacing your installed copy. It does not create a SkillRelay workspace, configure your client, or change approval policy.
+
+Enable or reload skills as required by your client, and keep the MCP connection configured above. In clients supporting named skill invocation, request: “Use $skillrelay-workflow for this task.” Other clients can load the installed `SKILL.md` as task guidance. No client-specific metadata disables implicit selection.
+
+The skill guides discovery before substantive work, observable trace capture, exact-version use reporting, and a bounded distillation step afterward. A separate learning reference covers independent evaluation and the human-review boundary. Use the same configured task namespace across sessions so skills remain discoverable. If a runtime adapter already captures events, follow its run-ownership contract to avoid duplicate reporting.
+
+**Participation remains best effort:** an MCP connection or installed skill cannot force model tool calls. Learning jobs still need a connected learner/evaluator or the configured external driver. Runtime adapters are needed to enforce lifecycle calls. This bundled workflow guide is maintained with SkillRelay; learned use-case skills continue to be retrieved dynamically through MCP.
+
 ## The learning loop
 
 1. **Observe:** report actions, tool results, errors, checks, and causal links. Run and workflow outcomes remain separate.

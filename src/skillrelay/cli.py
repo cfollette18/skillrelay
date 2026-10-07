@@ -11,6 +11,12 @@ def main():
     parser.add_argument("--home", help="Workspace directory (default ~/.skillrelay)")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("init", help="Create private local configuration")
+    install = sub.add_parser(
+        "install-skill", help="Copy the bundled workflow skill for your client"
+    )
+    install.add_argument(
+        "destination", help="New skill directory; existing paths are not overwritten"
+    )
     serve = sub.add_parser("serve", help="Run MCP over stdio or Streamable HTTP")
     serve.add_argument("--transport", choices=["stdio", "http"], default="stdio")
     serve.add_argument(
@@ -64,6 +70,21 @@ def main():
     sub.add_parser("audit", help="Inspect the operator audit trail")
     sub.add_parser("export", help="Export redacted workspace evidence as JSON")
     args = parser.parse_args()
+    if args.command == "install-skill":
+        from pathlib import Path
+        from shutil import copytree
+
+        destination = Path(args.destination).expanduser()
+        source = Path(__file__).parent / "bundled" / "skillrelay-workflow"
+        try:
+            copytree(source, destination)
+        except OSError as exc:
+            parser.error(f"Could not install skill: {exc}")
+        print(
+            f"Workflow skill installed: {destination}\n"
+            "Enable it in your MCP client's skills settings."
+        )
+        return
     home = workspace(args.home)
     config = initialize(home)
     service = Service(home / "skillrelay.db")

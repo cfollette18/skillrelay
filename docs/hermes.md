@@ -20,6 +20,14 @@ mcp_servers:
 
 Use another profile with `--agent hermes-evaluator` for independent evaluations. Both point to the same workspace; insert `--home /path/to/workspace` before `serve` to customize it. Stdio identity assumes a trusted local process. For separately authenticated identities use Streamable HTTP at `/mcp` with provisioned agent tokens.
 
+Install the bundled workflow guide into your chosen profile's skills directory:
+
+```bash
+uv run skillrelay install-skill /absolute/path/to/hermes-profile/skills/skillrelay-workflow
+```
+
+Load `skillrelay-workflow` for a substantive task using that profile's skill mechanism. The guide explains discovery, tracing, and bounded learning; installation alone does not force Hermes to call tools. It does not install the optional capture hook described below or start learning workers. The same guide supports an independently configured evaluator profile.
+
 ## Run the real demo
 
 The synthetic fixture has a UTF-8 BOM and semicolon delimiter. The naive parser fails; the parser for the documented format succeeds. The runner invokes the actual Hermes installation and configured model in isolated private profiles under `.demo/`. Your regular profile is not modified.

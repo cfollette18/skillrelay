@@ -51,6 +51,7 @@ All commands accept `--home /path/to/workspace` before the subcommand.
 
 | Command | Purpose |
 | --- | --- |
+| `install-skill DESTINATION` | Copy bundled workflow skill into a new client skill directory; no workspace initialization or overwrites |
 | `init`, `credential agent`, `add-agent NAME` | Initialize/provision agent access |
 | `status`, `traces [--run ID]`, `export`, `audit` | Inspect local evidence and decisions |
 | `skills [--task TASK]`, `inspect VERSION` | Inspect version history and exact hashes |
